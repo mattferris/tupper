@@ -35,7 +35,10 @@ fi
 
 sum=$( echo "${fssum} ${psum}" | sha1sum | cut -d\  -f1 )
 
-mkdir "$base/obj/$sum"
+mkdir -p "$base/obj/$sum"
+if [ ! -d "$base/ref" ]; then
+    mkdir "$base/ref"
+fi
 
 mv fs "$base/obj/$fssum"
 echo $fssum > "$base/obj/$sum/fs"
