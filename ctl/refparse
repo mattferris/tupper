@@ -1,0 +1,26 @@
+#!/bin/bash
+
+ref=$1
+
+if [ -z "$ref" ]; then
+    echo "usage: $(basename $0) <ref>" >&2
+    exit 1
+fi
+
+base="/root/containers"
+
+if [ -d "$base/obj/$ref" ]; then
+    echo "$ref"
+    exit 0
+fi
+
+matchnum=$( ls -1 "$base/obj" | grep "^$ref" | wc -l )
+if [ $matchnum -eq 1 ]; then
+    ls -1 "$base/obj" | grep "^$ref"
+    exit 0
+fi
+
+if [ -f "$base/ref/$ref" ]; then
+    cat "$base/ref/$ref"
+    exit 0
+fi

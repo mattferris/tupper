@@ -1,0 +1,81 @@
+#!/bin/bash
+
+name=$1
+target=$2
+
+if [ -z "$target" ]; then
+    echo "usage: $(basename $0) <name> <target>" >&2
+    exit 1
+fi
+
+base="/root/containers"
+
+target=$(realpath $target)
+
+#
+# resolve the chain of the container's union filesystem layers
+#
+_reslayer() {
+    name=$1
+    chain=$2
+
+    cd "$base/obj/$name"
+
+    if [ ! -f "fs" ]; then
+        echo "error: layer object doesn't contain a filesystem reference: $name" >&2
+    fi
+
+    obj=$(cat fs)
+
+    if [ ! -d "$base/obj/$obj" ]; then
+        echo "error: layer object doesn't exist: $name -> $obj" >&2
+        exit 1
+    fi
+
+    if [ ! -z "$chain" ]; then
+        chain="$chain:"
+    fi
+
+    chain="${chain}$base/obj/${obj}=RO"
+
+    if [ ! -f "parent" ]; then
+        echo $chain
+        return 0
+    fi
+
+    parent=$("$base/ctl/refparse" "$(cat parent)")
+
+    if [ ! -d "$base/obj/$parent" ]; then
+        echo "error: undefined parent '$parent' for container '$name'" >&2
+        exit 1
+    fi
+
+    _reslayer $parent $chain
+}
+
+layers=""
+
+if [ -d "$base/img/$name" ]; then
+    if [ -d "$base/img/$name/fs" ]; then
+        layers="$base/img/$name/fs=RW"
+    fi
+
+    if [ -f "$base/img/$name/obj" ]; then
+        obj=$("$base/ctl/refparse" "$(cat "$base/img/$name/obj")")
+    fi
+else
+    obj=$("$base/ctl/refparse" "$name")
+fi
+
+if [ ! -z "$layers" ]; then
+    layers="$layers:"
+fi
+
+layers="${layers}$(_reslayer $obj)=RO"
+
+echo $layers
+
+if ! ( unionfs -o cow,allow_other $layers $target ); then
+    echo "error: failed to prepare filesystem" >&2
+    exit 1
+fi

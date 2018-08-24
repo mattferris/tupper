@@ -1,0 +1,85 @@
+#!/bin/bash
+
+ref=$1
+
+if [ -z "$ref" ]; then
+    echo "usage: $(basename $0) <ref>" >&2
+    exit 1
+fi
+
+base="/root/containers"
+
+echo "verifying $ref" >&2
+
+if [ -d "$base/img/$ref" ]; then
+    if [ ! -f "$base/img/$ref/obj" ]; then
+        echo "error: image doesn't reference a layer object: $ref" >&2
+        exit 1
+    fi
+    ref=$(cat "$base/img/$ref/obj")
+fi
+
+ref=$("$base/ctl/refparse" "$ref")
+
+#
+# resolve the chain of parents
+#
+_resparent() {
+    ref=$1
+
+    if [ ! -d "$base/obj/$ref" ]; then
+        echo "error: layer object doesn't exist: $ref" >&2
+        exit 1
+    fi
+
+    cd "$base/obj/$ref"
+
+    parent=""
+    if [ -f "parent" ]; then
+        if [ ! -d "$base/obj/$parent" ]; then
+            echo "error: undefined parent $parent for layer object $ref" >&2
+            exit 1
+        fi
+
+        parent=$("$base/ctl/refparse" "$(cat parent)")
+
+        if ! ( _resparent "$parent" 2>/dev/null ); then
+            echo "layer $ref failed (parent)"
+            return 1
+        fi
+    fi
+
+    if [ ! -f "$base/obj/$ref/fs" ]; then
+        echo "error: layer object with missing filesystem: $ref" >&2
+        exit 1
+    fi
+
+    echo -n "layer $ref "
+
+    fs=$(cat "$base/obj/$ref/fs")
+    fssum=$( cd "$base/obj/$fs"; tar c * | sha1sum | cut -d\  -f1 )
+
+    if [ ! "$fs" = "$fssum" ]; then
+        echo "failed (filesystem)"
+        return 1
+    fi
+
+    refsum=$( echo "$fssum $parent" | sha1sum | cut -d\  -f1 )
+
+    if [ ! "$ref" = "$refsum" ]; then
+        echo "failed (meta)"
+        return 1
+    fi
+
+    echo "ok"
+    return 0
+}
+
+if ( _resparent $ref ); then
+    echo "verification successful" >&2
+else
+    echo "verification failed" >&2
+    exit 1
+fi
+
+

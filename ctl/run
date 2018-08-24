@@ -1,0 +1,69 @@
+#!/bin/bash
+
+name=$1
+
+if [ -z "$name" ]; then
+    echo "usage: $(basename $0) <name>" >&2
+    exit 1
+fi
+
+base="/root/containers"
+
+if [ ! -d "$base/img/$name" ]; then
+    echo "error: undefined container specified: $name" >&2
+    exit 1
+fi
+
+cd "$base/img/$name"
+
+# ensure mount point exists
+if [ ! -d "mnt" ]; then
+    mkdir mnt
+fi
+
+# clean filesystem if marked 'ephemeral'
+if [ -f "ephemeral" -a -d "fs" ]; then
+    rm -r fs
+fi
+
+if [ ! -d "fs" ]; then
+    mkdir fs
+fi
+
+# copy sources into filesystem
+if [ -f "sources" ]; then
+    for src in $(cat sources); do
+        if [ ! -z "$( echo $src | grep ':' )" ]; then
+            tpath=$(echo $src | cut -d\: -f2 | sed -e 's/^\///')
+            src=$(echo $src | cut -d\: -f1 )
+        else
+            tpath=$(echo $src | sed -e 's/^\///')
+        fi
+        mkdir -p "$base/img/$name/fs/$(dirname $tpath)"
+        if ! ( cp -rp "$src" "$base/img/$name/fs/$tpath" ); then
+            echo "error: failed to copy source: $src" >&2
+            exit 1
+        fi
+    done
+fi
+
+#
+# cleanup if caught exit
+#
+_cleanup() {
+    umount mnt >&2 2>/dev/null
+}
+trap _cleanup EXIT
+trap _cleanup KILL
+
+$base/ctl/mount $name mnt
+
+# check if we're booting (default), or just running a command inside the container
+boot="-b"
+cmd=""
+if [ -a "cmd" ]; then
+    boot=""
+    cmd=$(cat cmd)
+fi
+
+systemd-nspawn $boot -nD mnt --network-bridge=br0 --machine=$name $cmd

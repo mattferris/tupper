@@ -1,0 +1,35 @@
+#!/bin/bash
+
+set -e
+
+ref=$1
+name=$ref
+
+if [ -z "$name" ]; then
+    echo "usage: $(basename $0) <ref> [ <target> ]" >&2
+    exit1
+fi
+
+base="/root/containers"
+
+target="$base/img/$name"
+if [ ! -z "$2" ]; then
+    target="$2"
+fi
+
+ref=$("$base/ctl/refparse" "$ref")
+
+if [ ! -d "$base/obj/$ref" ]; then
+    echo "error: object doesn't exist: $name" >&2
+    exit 1
+fi
+
+if [ -d "$target" ]; then
+    echo "error: aborting, target already exists" >&2
+    exit 1
+fi
+
+mkdir "$target"
+echo "$ref" > "$target/obj"
+
+echo "checked out $ref to $target" >&2

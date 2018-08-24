@@ -1,0 +1,53 @@
+#!/bin/bash
+
+set -e
+
+name=$1
+msg=$2
+
+if [ -z "$name" ]; then
+    echo "usage: $(basename $0) <name> [ <msg> ]" >&2
+    exit1
+fi
+
+base="/root/containers"
+
+if [ ! -d "$base/img/$name" ]; then
+    echo "error: image doesn't exist: $name" >&2
+    exit 1
+fi
+
+cd "$base/img/$name"
+
+if [ ! -d "fs" ]; then
+    echo "error: nothing to commit: $name" >&2
+    exit 1
+fi
+
+author="$(whoami)@$(hostname -f)"
+
+fssum=$( cd fs && tar c * | sha1sum | cut -d\  -f1 )
+psum=""
+
+if [ -f "obj" ]; then
+    psum=$(cat obj)
+fi
+
+sum=$( echo "${fssum} ${psum}" | sha1sum | cut -d\  -f1 )
+
+mkdir "$base/obj/$sum"
+
+mv fs "$base/obj/$fssum"
+echo $fssum > "$base/obj/$sum/fs"
+echo "$author" > "$base/obj/$sum/author"
+echo "$msg" > "$base/obj/$sum/msg"
+
+if [ ! -z "$psum" ]; then
+    echo $psum > "$base/obj/$sum/parent"
+fi
+
+echo $sum > "$base/ref/$name"
+
+echo $sum > "$base/img/$name/obj"
+
+echo "committed $sum ($name)" >&2
