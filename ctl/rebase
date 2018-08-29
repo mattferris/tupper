@@ -2,25 +2,27 @@
 
 set -e
 
-child=$1
-parent=$2
+name=$1
+ref=$2
 
-if [ -z "$parent" ]; then
-    echo "usage: $(basename $0) <child> <parent>" >&2
+if [ -z "$ref" ]; then
+    echo "usage: $(basename $0) <name> <ref>" >&2
     exit 1
 fi
 
 base="/root/containers"
 
-childdir=""
-if [ -d "$base/img/$name" ]; then
-    childdir="$base/img/$child"
-else
-    childdir=$("$base/ctl/refparse" "$child")
+if [ ! -d "$base/img/$name" ]; then
+    echo "error: image doesn't exist: $name" >&2
+    exit 1
 fi
 
-parent=$("$base/ctl/refparse" "$parent")
+tref=$("$base/ctl/refparse" "$ref")
+if [ -z "$ref" ]; then
+    echo "error: bad ref, or object doesn't exist: $ref" >&2
+    exit 1
+fi
 
-echo "$parent" > "$childdir/obj"
+echo "$tref" > "$base/img/$name/obj"
 
-echo "rebased $child to $parent"
+echo "rebased $name to $tref"
