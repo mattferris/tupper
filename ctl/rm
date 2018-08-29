@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+
+ref=$1
+
+if [ -z "$ref" ]; then
+    echo "usage: $(basename $0) <ref> ..." >&2
+    exit 1
+fi
+
+base="/root/containers"
+
+for ref in $@; do
+    tref=$("$base/ctl/refparse" "$ref")
+    if [ -z "$tref" ]; then
+        echo "error: ref doesn't exist: $ref" >&2
+        exit 1
+    fi
+
+    fs=$(cat "$base/obj/$tref/fs")
+
+    rm -r "$base/obj/$fs" "$base/obj/$tref"
+
+    echo "removed $tref"
+done
