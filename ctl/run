@@ -66,4 +66,9 @@ if [ -a "cmd" ]; then
     cmd=$(cat cmd)
 fi
 
-systemd-nspawn $boot -nD mnt --network-bridge=br0 --machine=$name $cmd
+netbr=""
+if [ -f "net" ]; then
+    netbr="--network-bridge=$(cat "net")"
+fi
+
+systemd-nspawn $boot -nD mnt $netbr --machine=$name $cmd

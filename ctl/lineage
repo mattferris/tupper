@@ -20,6 +20,11 @@ fi
 
 ref=$("$base/ctl/refparse" "$ref")
 
+if [ -z "$ref" ]; then
+    echo "error: nonexistent ref specified" >&2
+    exit 1
+fi
+
 #
 # resolve the chain of parents
 #

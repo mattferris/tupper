@@ -1,34 +1,53 @@
 #!/bin/bash
+set -e
 
 name=$1
 target=$2
 
 if [ -z "$target" ]; then
-    echo "usage: $(basename $0) <name> <target>" >&2
+    echo "usage: $(basename $0) { <name> | <name>:<ancestor> } <target>" >&2
     exit 1
 fi
 
 base="/root/containers"
-
 target=$(realpath $target)
+
+stop=""
+stopref=""
+if [ "$( echo "$name" | grep : )" = "$name" ]; then
+    stop=$( echo $name | cut -d: -f2 )
+    name=$( echo $name | cut -d: -f1 )
+
+    if [ ! -z "$stop" ]; then
+        stopref=$("$base/ctl/refparse" "$stop")
+
+        if [ -z "$stopref" ]; then
+            echo "error: ancestor doesn't exist: $stop"
+            exit 1
+        fi
+    else
+        echo "error: empty ancestor"
+        exit 1
+    fi
+fi
 
 #
 # resolve the chain of the container's union filesystem layers
 #
 _reslayer() {
-    name=$1
+    ref=$1
     chain=$2
 
-    cd "$base/obj/$name"
+    cd "$base/obj/$ref"
 
     if [ ! -f "fs" ]; then
-        echo "error: layer object doesn't contain a filesystem reference: $name" >&2
+        echo "error: layer object doesn't contain a filesystem reference: $ref" >&2
     fi
 
     obj=$(cat fs)
 
     if [ ! -d "$base/obj/$obj" ]; then
-        echo "error: layer object doesn't exist: $name -> $obj" >&2
+        echo "error: layer object doesn't exist: $ref -> $obj" >&2
         exit 1
     fi
 
@@ -39,6 +58,17 @@ _reslayer() {
     chain="${chain}$base/obj/${obj}=RO"
 
     if [ ! -f "parent" ]; then
+        # if a stop was supplied, but wasn't encountered by the oldest ancestor, error out
+        if [ ! -z "$stopref" -a ! "$ref" = "$stopref" ]; then
+            echo "error: object '$stop' doesn't appear to be an ancestor of '$name'" >&2
+            exit 1
+        fi
+
+        echo $chain
+        return 0
+    fi
+
+    if [ ! -z "$stopref" -a "$ref" = "$stopref" ]; then
         echo $chain
         return 0
     fi
@@ -46,7 +76,7 @@ _reslayer() {
     parent=$("$base/ctl/refparse" "$(cat parent)")
 
     if [ ! -d "$base/obj/$parent" ]; then
-        echo "error: undefined parent '$parent' for container '$name'" >&2
+        echo "error: undefined parent '$parent' for container '$ref'" >&2
         exit 1
     fi
 
@@ -71,9 +101,7 @@ if [ ! -z "$layers" ]; then
     layers="$layers:"
 fi
 
-layers="${layers}$(_reslayer $obj)=RO"
-
-echo $layers
+layers="${layers}$(_reslayer $obj)"
 
 if ! ( unionfs -o cow,allow_other $layers $target ); then
     echo "error: failed to prepare filesystem" >&2

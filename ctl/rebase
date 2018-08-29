@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -e
+
+child=$1
+parent=$2
+
+if [ -z "$parent" ]; then
+    echo "usage: $(basename $0) <child> <parent>" >&2
+    exit 1
+fi
+
+base="/root/containers"
+
+childdir=""
+if [ -d "$base/img/$name" ]; then
+    childdir="$base/img/$child"
+else
+    childdir=$("$base/ctl/refparse" "$child")
+fi
+
+parent=$("$base/ctl/refparse" "$parent")
+
+echo "$parent" > "$childdir/obj"
+
+echo "rebased $child to $parent"

@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+name=$1
+ref=$2
+
+if [ -z "$ref" ]; then
+    echo "usage: $(basename $0) <name> <ref>" >&2
+    exit 1
+fi
+
+base="/root/containers"
+
+tref=$("$base/ctl/refparse" "$ref")
+if [ -z "$tref" ]; then
+    echo "error: ref doesn't exist: $ref"
+    exit 1
+fi
+
+echo "$tref" > "$base/ref/$name"

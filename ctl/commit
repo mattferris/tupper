@@ -7,17 +7,22 @@ msg=$2
 
 if [ -z "$name" ]; then
     echo "usage: $(basename $0) <name> [ <msg> ]" >&2
-    exit1
+    exit 1
 fi
 
 base="/root/containers"
 
-if [ ! -d "$base/img/$name" ]; then
-    echo "error: image doesn't exist: $name" >&2
+path="$base/img/$name"
+if [ "$( echo $name | grep ^/ )" = "$name" ]; then
+    path="$name"
+fi
+
+if [ ! -d "$path" ]; then
+    echo "error: image doesn't exist: $path" >&2
     exit 1
 fi
 
-cd "$base/img/$name"
+cd "$path"
 
 if [ ! -d "fs" ]; then
     echo "error: nothing to commit: $name" >&2
@@ -49,8 +54,10 @@ if [ ! -z "$psum" ]; then
     echo $psum > "$base/obj/$sum/parent"
 fi
 
-echo $sum > "$base/ref/$name"
+if [ "$path" = "$base/img/$name" ]; then
+    echo $sum > "$base/ref/$name"
+fi
 
-echo $sum > "$base/img/$name/obj"
+echo $sum > "$path/obj"
 
 echo "committed $sum ($name)" >&2
