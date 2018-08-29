@@ -4,12 +4,14 @@ set -e
 name=$1
 ref=$2
 
-if [ -z "$ref" ]; then
-    echo "usage: $(basename $0) <name> <ref>" >&2
-    exit 1
-fi
-
 base="/root/containers"
+
+if [ -z "$ref" ]; then
+    for ref in $(ls -1 "$base/ref"); do
+        echo "$ref" "->" $("$base/ctl/refparse" "$ref")
+    done
+    exit 0
+fi
 
 tref=$("$base/ctl/refparse" "$ref")
 if [ -z "$tref" ]; then
