@@ -8,7 +8,7 @@ base="/root/containers"
 
 if [ -z "$ref" ]; then
     for ref in $(ls -1 "$base/ref"); do
-        echo "$ref" "->" $("$base/ctl/refparse" "$ref")
+        echo "$ref -> $("$base/ctl/refparse" "$ref")"
     done
     exit 0
 fi
