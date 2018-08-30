@@ -18,7 +18,7 @@ if [ ! -d "$base/img/$name" ]; then
 fi
 
 tref=$("$base/ctl/refparse" "$ref")
-if [ -z "$ref" ]; then
+if [ -z "$tref" ]; then
     echo "error: bad ref, or object doesn't exist: $ref" >&2
     exit 1
 fi
