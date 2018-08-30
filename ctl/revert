@@ -1,0 +1,32 @@
+#!/bin/bash
+set -e
+
+name=$1
+
+if [ -z "$name" ]; then
+    echo "usage: $(basename $0) <name>" >&2
+    exit 1
+fi
+
+base="/root/containers"
+
+path="$base/img/$name"
+if [ "$( echo $name | grep ^/ )" = "$name" ]; then
+    path="$name"
+fi
+
+if [ ! -d "$path" ]; then
+    echo "error: image doesn't exist: $path" >&2
+    exit 1
+fi
+
+cd "$path"
+
+if [ ! -d "fs" ]; then
+    echo "error: nothing to revert: $name" >&2
+    exit 1
+fi
+
+rm -r "fs"
+
+echo "reverted changes in $name" >&2
