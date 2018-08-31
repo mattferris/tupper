@@ -12,24 +12,23 @@ set -e
 name=$1
 target=$2
 
-if [ -z "$target" ]; then
-    echo "usage: $(basename $0) { <name> | <name>:<ancestor> } <target>" >&2
+if [[ -z "$target" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) { <name> | <name>:<ancestor> } <target>" >&2
     exit 1
 fi
 
-base="/root/containers"
 target=$(realpath $target)
 
 stop=""
 stopref=""
-if [ "$( echo "$name" | grep : )" = "$name" ]; then
+if [[ "$( echo "$name" | grep : )" = "$name" ]]; then
     stop=$( echo $name | cut -d: -f2 )
     name=$( echo $name | cut -d: -f1 )
 
-    if [ ! -z "$stop" ]; then
-        stopref=$("$base/ctl/refparse" "$stop")
+    if [[ ! -z "$stop" ]]; then
+        stopref=$("$TUP_BINDIR/refparse" "$stop")
 
-        if [ -z "$stopref" ]; then
+        if [[ -z "$stopref" ]]; then
             echo "error: ancestor doesn't exist: $stop"
             exit 1
         fi
@@ -46,26 +45,26 @@ _reslayer() {
     ref=$1
     chain=$2
 
-    cd "$base/obj/$ref"
+    cd "$TUP_OBJDIR/layers/$ref"
 
-    if [ ! -f "fs" ]; then
+    if [[ ! -f "fs" ]]; then
         echo "error: layer object doesn't contain a filesystem reference: $ref" >&2
     fi
 
     obj=$(cat fs)
 
-    if [ ! -d "$base/obj/$obj" ]; then
+    if [[ ! -d "$TUP_OBJDIR/layers/$obj" ]]; then
         echo "error: layer object doesn't exist: $ref -> $obj" >&2
         exit 1
     fi
 
-    if [ ! -z "$chain" ]; then
+    if [[ ! -z "$chain" ]]; then
         chain="$chain:"
     fi
 
-    chain="${chain}$base/obj/${obj}=RO"
+    chain="${chain}$TUP_OBJDIR/layers/${obj}=RO"
 
-    if [ ! -f "parent" ]; then
+    if [[ ! -f "parent" ]]; then
         # if a stop was supplied, but wasn't encountered by the oldest ancestor, error out
         if [ ! -z "$stopref" -a ! "$ref" = "$stopref" ]; then
             echo "error: object '$stop' doesn't appear to be an ancestor of '$name'" >&2
@@ -76,14 +75,14 @@ _reslayer() {
         return 0
     fi
 
-    if [ ! -z "$stopref" -a "$ref" = "$stopref" ]; then
+    if [[ ! -z "$stopref" -a "$ref" = "$stopref" ]]; then
         echo $chain
         return 0
     fi
 
-    parent=$("$base/ctl/refparse" "$(cat parent)")
+    parent=$("$TUP_BINDIR/refparse" "$(cat parent)")
 
-    if [ ! -d "$base/obj/$parent" ]; then
+    if [[ ! -d "$TUP_OBJDIR/layers/$parent" ]]; then
         echo "error: undefined parent '$parent' for container '$ref'" >&2
         exit 1
     fi
@@ -93,19 +92,19 @@ _reslayer() {
 
 layers=""
 
-if [ -d "$base/img/$name" ]; then
-    if [ -d "$base/img/$name/fs" ]; then
-        layers="$base/img/$name/fs=RW"
+if [[ -d "$TUP_IMGDIR/$name" ]]; then
+    if [[ -d "$TUP_IMGDIR/$name/fs" ]]; then
+        layers="$TUP_IMGDIR/$name/fs=RW"
     fi
 
-    if [ -f "$base/img/$name/obj" ]; then
-        obj=$("$base/ctl/refparse" "$(cat "$base/img/$name/obj")")
+    if [[ -f "$TUP_IMGDIR/$name/obj" ]]; then
+        obj=$("$TUP_BINDIR/refparse" "$(cat "$TUP_IMGDIR/$name/obj")")
     fi
 else
-    obj=$("$base/ctl/refparse" "$name")
+    obj=$("$TUP_BINDIR/refparse" "$name")
 fi
 
-if [ ! -z "$layers" ]; then
+if [[ ! -z "$layers" ]]; then
     layers="$layers:"
 fi
 

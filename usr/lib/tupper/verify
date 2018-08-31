@@ -9,24 +9,22 @@
 
 ref=$1
 
-if [ -z "$ref" ]; then
-    echo "usage: $(basename $0) <ref>" >&2
+if [[ -z "$ref" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <ref>" >&2
     exit 1
 fi
 
-base="/root/containers"
-
 echo "verifying $ref" >&2
 
-if [ -d "$base/img/$ref" ]; then
-    if [ ! -f "$base/img/$ref/obj" ]; then
+if [[ -d "$TUP_IMGDIR/$ref" ]]; then
+    if [[ ! -f "$TUP_IMGDIR/$ref/obj" ]]; then
         echo "error: image doesn't reference a layer object: $ref" >&2
         exit 1
     fi
-    ref=$(cat "$base/img/$ref/obj")
+    ref=$(cat "$TUP_IMGDIR/$ref/obj")
 fi
 
-ref=$("$base/ctl/refparse" "$ref")
+ref=$("$TUP_BINDIR/refparse" "$ref")
 
 #
 # resolve the chain of parents
@@ -34,21 +32,21 @@ ref=$("$base/ctl/refparse" "$ref")
 _resparent() {
     ref=$1
 
-    if [ ! -d "$base/obj/$ref" ]; then
+    if [[ ! -d "$TUP_OBJDIR/layers/$ref" ]]; then
         echo "error: layer object doesn't exist: $ref" >&2
         exit 1
     fi
 
-    cd "$base/obj/$ref"
+    cd "$TUP_OBJDIR/layers/$ref"
 
     parent=""
-    if [ -f "parent" ]; then
-        if [ ! -d "$base/obj/$parent" ]; then
+    if [[ -f "parent" ]]; then
+        parent=$("$TUP_BINDIR/refparse" "$(cat parent)")
+
+        if [[ ! -d "$TUP_OBJDIR/layers/$parent" ]]; then
             echo "error: undefined parent $parent for layer object $ref" >&2
             exit 1
         fi
-
-        parent=$("$base/ctl/refparse" "$(cat parent)")
 
         if ! ( _resparent "$parent" 2>/dev/null ); then
             echo "layer $ref failed (parent)"
@@ -56,24 +54,24 @@ _resparent() {
         fi
     fi
 
-    if [ ! -f "$base/obj/$ref/fs" ]; then
+    if [[ ! -f "$TUP_OBJDIR/layers/$ref/fs" ]]; then
         echo "error: layer object with missing filesystem: $ref" >&2
         exit 1
     fi
 
     echo -n "layer $ref "
 
-    fs=$(cat "$base/obj/$ref/fs")
-    fssum=$( cd "$base/obj/$fs"; tar c * | sha1sum | cut -d\  -f1 )
+    fs=$(cat "$TUP_OBJDIR/layers/$ref/fs")
+    fssum=$( cd "$TUP_OBJDIR/layers/$fs"; tar c * | sha1sum | cut -d\  -f1 )
 
-    if [ ! "$fs" = "$fssum" ]; then
+    if [[ ! "$fs" = "$fssum" ]]; then
         echo "failed (filesystem)"
         return 1
     fi
 
     refsum=$( echo "$fssum $parent" | sha1sum | cut -d\  -f1 )
 
-    if [ ! "$ref" = "$refsum" ]; then
+    if [[ ! "$ref" = "$refsum" ]]; then
         echo "failed (meta)"
         return 1
     fi

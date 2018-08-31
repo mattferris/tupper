@@ -1,0 +1,68 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+name=$1
+msg=$2
+
+if [[ -z "$name" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <name> [ <msg> ]" >&2
+    exit 1
+fi
+
+path="$TUP_IMGDIR/$name"
+if [[ "$( echo $name | grep ^/ )" = "$name" ]]; then
+    path="$name"
+fi
+
+if [[ ! -d "$path" ]]; then
+    echo "error: image doesn't exist: $path" >&2
+    exit 1
+fi
+
+cd "$path"
+
+if [[ ! -d "fs" ]]; then
+    echo "error: nothing to commit: $name" >&2
+    exit 1
+fi
+
+author="$(whoami)@$(hostname -f)"
+
+fssum=$( cd fs && tar c * | sha1sum | cut -d\  -f1 )
+psum=""
+
+if [[ -f "obj" ]]; then
+    psum=$(cat obj)
+fi
+
+sum=$( echo "${fssum} ${psum}" | sha1sum | cut -d\  -f1 )
+
+mkdir -p "$TUP_OBJDIR/layers/$sum"
+if [[ ! -d "$TUP_OBJDIR/tags" ]]; then
+    mkdir "$TUP_OBJDIR/tags"
+fi
+
+mv fs "$TUP_OBJDIR/layers/$fssum"
+echo $fssum > "$TUP_OBJDIR/layers/$sum/fs"
+echo "$author" > "$TUP_OBJDIR/layers/$sum/author"
+echo "$msg" > "$TUP_OBJDIR/layers/$sum/msg"
+
+if [[ ! -z "$psum" ]]; then
+    echo $psum > "$TUP_OBJDIR/layers/$sum/parent"
+fi
+
+if [[ "$path" = "$TUP_IMGDIR/$name" ]]; then
+    echo $sum > "$TUP_OBJDIR/tags/$name"
+fi
+
+echo $sum > "$path/obj"
+
+echo "committed $sum ($name)" >&2

@@ -1,0 +1,112 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+IFS=":"
+
+export TUP_FRONT_CMD=$(basename "$0")
+
+
+#
+# Discover path to subcommands
+#
+
+if [[ -z "$TUP_BINPATH" ]]; then
+    TUP_BINPATH="~/containers/ctl:/usr/lib/tup"
+fi
+
+if [[ -z "$1" ]]; then
+cat <<EOF >&2
+
+usage: $(basename $0) <cmd> [ <args> ... ]
+
+    checkout  Create an image from an existing object
+    commit    Commit the changes in an image to an object
+    lineage   List all the ancestors of an image or object
+    mount     Mount an image or object
+    rebase    Rebase an image to a different object
+    refparse  Parse an object hash partial or tag
+    revert    Revert an image to it's previous commit
+    rm        Remove an object
+    run       Boot or execute an image
+    squash    Combine one or more related objects
+    tag       Tag an object
+    verify    Verify an object or lineage
+
+EOF
+exit 1
+fi
+
+cmd=$1
+shift
+
+for path in $TUP_BINPATH; do
+    cmdpath="$path/$cmd"
+    if [[ -x "$(eval echo ${cmdpath//>})" ]]; then
+        export TUP_BINDIR="$path"
+    fi
+done
+
+
+#
+# Discover path to config directory
+#
+
+if [[ -z "$TUP_CFGPATH" ]]; then
+    TUP_CFGPATH="~/containers/config:/etc/tupper"
+fi
+
+for path in $TUP_CFGPATH; do
+    if [[ -d "`eval echo ${path//>}`" ]]; then
+        export TUP_CFGDIR=$path
+    fi
+done
+
+
+#
+# Discover path to object/reference storage
+#
+
+if [[ -z "$TUP_OBJPATH" ]]; then
+    TUP_OBJPATH="~/containers/objects:/var/lib/tup/objects"
+fi
+
+for path in $TUP_OBJPATH; do
+    if [[ -d "`eval echo ${path//>}`" ]]; then
+        export TUP_OBJDIR=$(dirname "$path")
+    fi
+done
+
+
+#
+# Discover path to image directory
+#
+
+if [[ -z "$TUP_IMGPATH" ]]; then
+    TUP_IMGPATH="~/containers/images:/var/lib/tup/images"
+fi
+
+for path in $TUP_IMGPATH; do
+    if [[ -d "`eval echo ${path//>}`" ]]; then
+        export TUP_IMGDIR="$path"
+    fi
+done
+
+
+#
+# Exec the subcommand or error
+#
+
+if [[ -x "$TUP_BINDIR/$cmd" ]]; then
+    exec "$TUP_BINDIR/$cmd" $@
+else
+    echo "error: unknown command: $cmd" >&2
+    exit 1
+fi
+

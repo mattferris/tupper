@@ -9,25 +9,23 @@
 
 ref=$1
 
-if [ -z "$ref" ]; then
-    echo "usage: $(basename $0) <ref>" >&2
+if [[ -z "$ref" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <ref>" >&2
     exit 1
 fi
 
-base="/root/containers"
-
-if [ -d "$base/img/$ref" ]; then
+if [[ -d "$TUP_IMGDIR/$ref" ]]; then
     echo $ref
-    if [ ! -f "$base/img/$ref/obj" ]; then
+    if [ ! -f "$TUP_IMGDIR/$ref/obj" ]; then
         echo "error: image doesn't reference a layer object: $ref" >&2
         exit 1
     fi
-    ref=$(cat "$base/img/$ref/obj")
+    ref=$(cat "$TUP_IMGDIR/$ref/obj")
 fi
 
-ref=$("$base/ctl/refparse" "$ref")
+ref=$("$TUP_BINDIR/refparse" "$ref")
 
-if [ -z "$ref" ]; then
+if [[ -z "$ref" ]]; then
     echo "error: nonexistent ref specified" >&2
     exit 1
 fi
@@ -38,22 +36,22 @@ fi
 _resparent() {
     ref=$1
 
-    if [ ! -d "$base/obj/$ref" ]; then
+    if [[ ! -d "$TUP_OBJDIR/layers/$ref" ]]; then
         echo "error: layer object doesn't exist: $ref" >&2
         exit 1
     fi
 
-    cd "$base/obj/$ref"
+    cd "$TUP_OBJDIR/layers/$ref"
 
-    echo "$ref <$(cat "$base/obj/$ref/author")> $(cat "$base/obj/$ref/msg")"
+    echo "$ref <$(cat "$TUP_OBJDIR/layers/$ref/author")> $(cat "$TUP_OBJDIR/layers/$ref/msg")"
 
-    if [ ! -f "parent" ]; then
+    if [[ ! -f "parent" ]]; then
         return 0
     fi
 
-    parent=$("$base/ctl/refparse" "$(cat parent)")
+    parent=$("$TUP_BINDIR/refparse" "$(cat parent)")
 
-    if [ ! -d "$base/obj/$parent" ]; then
+    if [[ ! -d "$TUP_OBJDIR/layers/$parent" ]]; then
         echo "error: undefined parent $parent for layer object $ref" >&2
         exit 1
     fi

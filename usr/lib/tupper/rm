@@ -11,23 +11,21 @@ set -e
 
 ref=$1
 
-if [ -z "$ref" ]; then
-    echo "usage: $(basename $0) <ref> ..." >&2
+if [[ -z "$ref" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <ref> ..." >&2
     exit 1
 fi
 
-base="/root/containers"
-
 for ref in $@; do
-    tref=$("$base/ctl/refparse" "$ref")
-    if [ -z "$tref" ]; then
+    tref=$("$TUP_BINDIR/refparse" "$ref")
+    if [[ -z "$tref" ]]; then
         echo "error: ref doesn't exist: $ref" >&2
         exit 1
     fi
 
-    fs=$(cat "$base/obj/$tref/fs")
+    fs=$(cat "$TUP_OBJDIR/layers/$tref/fs")
 
-    rm -r "$base/obj/$fs" "$base/obj/$tref"
+    rm -r "$TUP_OBJDIR/layers/$fs" "$TUP_OBJDIR/layers/$tref"
 
     echo "removed $tref"
 done

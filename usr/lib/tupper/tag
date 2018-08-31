@@ -12,19 +12,17 @@ set -e
 name=$1
 ref=$2
 
-base="/root/containers"
-
-if [ -z "$ref" ]; then
-    for ref in $(ls -1 "$base/ref"); do
-        echo "$ref -> $("$base/ctl/refparse" "$ref")"
+if [[ -z "$ref" ]]; then
+    for ref in $(ls -1 "$TUP_OBJDIR/tags"); do
+        echo "$ref -> $("$TUP_BINDIR/refparse" "$ref")"
     done
     exit 0
 fi
 
-tref=$("$base/ctl/refparse" "$ref")
-if [ -z "$tref" ]; then
+tref=$("$TUP_BINDIR/refparse" "$ref")
+if [[ -z "$tref" ]]; then
     echo "error: ref doesn't exist: $ref"
     exit 1
 fi
 
-echo "$tref" > "$base/ref/$name"
+echo "$tref" > "$TUP_OBJDIR/tags/$name"

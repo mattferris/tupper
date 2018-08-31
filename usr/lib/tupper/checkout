@@ -12,28 +12,24 @@ set -e
 ref=$1
 name=$ref
 
-if [ -z "$name" ]; then
-    echo "usage: $(basename $0) <ref> [ <target> ]" >&2
-    exit1
+if [[ -z "$name" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <ref> [ <target> ]" >&2
+    exit 1
 fi
 
-base="/root/containers"
-
-target="$base/img/$name"
-if [ ! -z "$2" ]; then
+target="$TUP_IMGDIR/$name"
+if [[ ! -z "$2" ]]; then
     target="$2"
-elif [ ! -d "$base/img" ]; then
-    mkdir "$base/img"
 fi
 
-ref=$("$base/ctl/refparse" "$ref")
+ref=$("$TUP_BINDIR/refparse" "$ref")
 
-if [ ! -d "$base/obj/$ref" ]; then
+if [[ ! -d "$TUP_OBJDIR/layers/$ref" ]]; then
     echo "error: object doesn't exist: $name" >&2
     exit 1
 fi
 
-if [ -d "$target" ]; then
+if [[ -d "$target" ]]; then
     echo "error: aborting, target already exists" >&2
     exit 1
 fi

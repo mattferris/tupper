@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+ref=$1
+
+if [[ -z "$ref" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <ref>" >&2
+    exit 1
+fi
+
+if [[ -d "$TUP_OBJDIR/layers/$ref" ]]; then
+    echo "$ref"
+    exit 0
+fi
+
+matchnum=$( ls -1 "$TUP_OBJDIR/layers" | grep "^$ref" | wc -l )
+if [[ $matchnum -eq 1 ]]; then
+    ls -1 "$TUP_OBJDIR/layers" | grep "^$ref"
+    exit 0
+fi
+
+if [[ -f "$TUP_OBJDIR/tags/$ref" ]]; then
+    cat "$TUP_OBJDIR/tags/$ref"
+    exit 0
+fi

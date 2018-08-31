@@ -12,24 +12,22 @@ set -e
 name=$1
 ref=$2
 
-if [ -z "$ref" ]; then
-    echo "usage: $(basename $0) <name> <ref>" >&2
+if [[ -z "$ref" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <name> <ref>" >&2
     exit 1
 fi
 
-base="/root/containers"
-
-if [ ! -d "$base/img/$name" ]; then
+if [[ ! -d "$TUP_IMGDIR/$name" ]]; then
     echo "error: image doesn't exist: $name" >&2
     exit 1
 fi
 
-tref=$("$base/ctl/refparse" "$ref")
-if [ -z "$tref" ]; then
+tref=$("$TUP_BINDIR/refparse" "$ref")
+if [[ -z "$tref" ]]; then
     echo "error: bad ref, or object doesn't exist: $ref" >&2
     exit 1
 fi
 
-echo "$tref" > "$base/img/$name/obj"
+echo "$tref" > "$TUP_IMGDIR/$name/obj"
 
 echo "rebased $name to $tref"

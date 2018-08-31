@@ -1,0 +1,49 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+ref=$1
+ancestor=$2
+msg=$3
+
+if [[ -z "$ancestor" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <ref> <ancestor> [ <msg> ]" >&2
+    exit 1
+fi
+
+# cleanup on exit
+_cleanup() {
+    umount "$target" 2>&1 >/dev/null
+    if [[ ! -z "$squashref" -a -d "$TUP_OBJDIR/layers/$squashref" ]]; then
+        rm -r "$TUP_OBJDIR/layers/$squashref"
+    fi
+}
+trap _cleanup KILL
+trap _cleanup EXIT
+
+squashref=$(echo "$ref $ancestor" | sha1sum | cut -d\  -f1)
+
+target="$TUP_OBJDIR/layers/$squashref/mnt"
+mkdir -p "$TUP_OBJDIR/layers/$squashref/mnt"
+
+ancestorref=$("$TUP_BINDIR/refparse" "$ancestor")
+if [[ -f "$TUP_OBJDIR/layers/$ancestorref/parent" ]]; then
+    cp "$TUP_OBJDIR/layers/$ancestorref/parent" "$TUP_OBJDIR/layers/$squashref/obj"
+fi
+
+"$TUP_BINDIR/mount" "$ref:$ancestor" "$target"
+
+cp -rp "$TUP_OBJDIR/layers/$squashref/mnt" "$TUP_OBJDIR/layers/$squashref/fs"
+
+if [[ -z "$msg" ]]; then
+    msg="squashed layers $ref:$ancestor"
+fi
+
+"$TUP_BINDIR/commit" "$TUP_OBJDIR/layers/$squashref" "$msg"
