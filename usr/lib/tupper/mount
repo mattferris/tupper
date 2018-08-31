@@ -66,7 +66,7 @@ _reslayer() {
 
     if [[ ! -f "parent" ]]; then
         # if a stop was supplied, but wasn't encountered by the oldest ancestor, error out
-        if [ ! -z "$stopref" -a ! "$ref" = "$stopref" ]; then
+        if [[ ! -z "$stopref" && ! "$ref" = "$stopref" ]]; then
             echo "error: object '$stop' doesn't appear to be an ancestor of '$name'" >&2
             exit 1
         fi
@@ -75,7 +75,7 @@ _reslayer() {
         return 0
     fi
 
-    if [[ ! -z "$stopref" -a "$ref" = "$stopref" ]]; then
+    if [[ ! -z "$stopref" && "$ref" = "$stopref" ]]; then
         echo $chain
         return 0
     fi
