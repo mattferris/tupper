@@ -66,7 +66,7 @@ trap _cleanup KILL
 # check if we're booting (default), or just running a command inside the container
 boot="-b"
 cmd=""
-if [[ -a "cmd" ]]; then
+if [[ -f "cmd" ]]; then
     boot=""
     cmd=$(cat cmd)
 fi
