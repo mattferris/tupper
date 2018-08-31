@@ -1,7 +1,7 @@
-containerctl
-============
+tupper
+======
 
-containerctl helps to build and manage container images primarily for use with
+tupper helps to build and manage container images primarily for use with
 integration testing. Containers can be built in a layered manner, with multiple
 images sharing common filesystems for efficiency. Under the hood, `unionfs` and
 `systemd-nspawn` are used to provision the container instances.
@@ -13,7 +13,7 @@ Clone the repo into `/root/containers`. This is currently a hardcoded path, and
 therefore required.
 
 ```
-# git clone git@gitlab.fasdoutreach.ca:mattferris/containerctl.git /root/containers
+# git clone git@github.com/mattferris/tupper.git /root/containers
 ```
 
 For now, all commands must be run from `/root/containers`.
