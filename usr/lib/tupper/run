@@ -27,7 +27,7 @@ if [[ ! -d "mnt" ]]; then
 fi
 
 # clean filesystem if marked 'ephemeral'
-if [[ -f "ephemeral" -a -d "fs" ]]; then
+if [[ -f "ephemeral" && -d "fs" ]]; then
     rm -r fs
 fi
 
