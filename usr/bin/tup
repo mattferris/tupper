@@ -47,9 +47,10 @@ cmd=$1
 shift
 
 for path in $TUP_BINPATH; do
+    path=$(eval echo ${path//>})
     cmdpath="$path/$cmd"
-    if [[ -x "$(eval echo ${cmdpath//>})" ]]; then
-        export TUP_BINDIR="$path"
+    if [[ -x "$cmdpath" ]]; then
+        export TUP_BINDIR=$path
     fi
 done
 
@@ -63,7 +64,8 @@ if [[ -z "$TUP_CFGPATH" ]]; then
 fi
 
 for path in $TUP_CFGPATH; do
-    if [[ -d "`eval echo ${path//>}`" ]]; then
+    path=$(eval echo ${path//>})
+    if [[ -d "$path" ]]; then
         export TUP_CFGDIR=$path
     fi
 done
@@ -78,8 +80,9 @@ if [[ -z "$TUP_OBJPATH" ]]; then
 fi
 
 for path in $TUP_OBJPATH; do
-    if [[ -d "`eval echo ${path//>}`" ]]; then
-        export TUP_OBJDIR=$(dirname "$path")
+    path=$(eval echo ${path//>})
+    if [[ -d "$path" ]]; then
+        export TUP_OBJDIR=$path
     fi
 done
 
@@ -93,8 +96,9 @@ if [[ -z "$TUP_IMGPATH" ]]; then
 fi
 
 for path in $TUP_IMGPATH; do
-    if [[ -d "`eval echo ${path//>}`" ]]; then
-        export TUP_IMGDIR="$path"
+    path=$(eval echo ${path//>})
+    if [[ -d "$path" ]]; then
+        export TUP_IMGDIR=$path
     fi
 done
 
