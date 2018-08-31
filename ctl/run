@@ -1,4 +1,11 @@
 #!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
 
 name=$1
 
@@ -66,9 +73,9 @@ if [ -a "cmd" ]; then
     cmd=$(cat cmd)
 fi
 
-netbr=""
+netz=""
 if [ -f "net" ]; then
-    netbr="--network-bridge=$(cat "net")"
+    netz="--network-zone=$(cat "net")"
 fi
 
-systemd-nspawn $boot -nD mnt $netbr --machine=$name $cmd
+systemd-nspawn $boot -nD mnt $netz --machine=$name $cmd
