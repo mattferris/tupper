@@ -14,7 +14,7 @@ ref=$2
 
 if [[ -z "$ref" ]]; then
     for ref in $(ls -1 "$TUP_OBJDIR/tags"); do
-        echo "$ref -> $("$TUP_BINDIR/refparse" "$ref")"
+        echo "$ref -> $("$TUP_BINDIR/refparse" "$(cat "$TUP_OBJDIR/tags/$ref")")"
     done
     exit 0
 fi
