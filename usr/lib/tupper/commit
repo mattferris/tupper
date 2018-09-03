@@ -65,10 +65,10 @@ fi
 if [[ ! "$path" = "$name" ]]; then
     mv fs "$TUP_OBJDIR/layers/$fssum"
 else
-    cp -rp "$path" "$TUP_OBJDIR/layers/$fssum"
+    cp -rp "$path" "$TUP_OBJDIR/layers/$imgsum"
 fi
 
-echo $fssum > "$TUP_OBJDIR/layers/$sum/fs"
+echo $imgsum > "$TUP_OBJDIR/layers/$sum/fs"
 echo "$author" > "$TUP_OBJDIR/layers/$sum/author"
 echo "$msg" > "$TUP_OBJDIR/layers/$sum/msg"
 
