@@ -47,11 +47,10 @@ else
 fi
 
 cd "$path"
-author="$(whoami)@$(hostname -f)"
 
 psum=""
 
-if [[ ! "$path" = "$name" && -f "obj" ]]; then
+if [[ ( ! "$path" = "$name" || ! -z "$( echo "$path" | grep "^$TUP_OBJDIR" )" ) && -f "obj" ]]; then
     psum=$(cat obj)
 fi
 
@@ -63,18 +62,18 @@ if [[ ! -d "$TUP_OBJDIR/tags" ]]; then
 fi
 
 if [[ ! "$path" = "$name" ]]; then
-    mv fs "$TUP_OBJDIR/layers/$fssum"
+    mv fs "$TUP_OBJDIR/layers/$imgsum"
 else
     cp -rp "$path" "$TUP_OBJDIR/layers/$imgsum"
 fi
 
 echo $imgsum > "$TUP_OBJDIR/layers/$sum/fs"
-echo "$author" > "$TUP_OBJDIR/layers/$sum/author"
-echo "$msg" > "$TUP_OBJDIR/layers/$sum/msg"
 
 if [[ ! -z "$psum" ]]; then
     echo $psum > "$TUP_OBJDIR/layers/$sum/parent"
 fi
+
+"$TUP_BINDIR/ammend" "$sum" "$msg"
 
 if [[ "$path" = "$TUP_IMGDIR/$name" ]]; then
     echo $sum > "$TUP_OBJDIR/tags/$name"
