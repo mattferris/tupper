@@ -19,7 +19,11 @@ fi
 
 target="$TUP_IMGDIR/$name"
 if [[ ! -z "$2" ]]; then
-    target="$2"
+    if [[ ! -z "$( echo "$2" | grep ^/ )" ]]; then
+        target="$2"
+    else
+        target="$TUP_IMGDIR/$2"
+    fi
 fi
 
 ref=$("$TUP_BINDIR/refparse" "$ref")
