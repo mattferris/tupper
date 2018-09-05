@@ -21,7 +21,7 @@ fi
 # cleanup on exit
 _cleanup() {
     umount "$target" 2>&1 >/dev/null
-    if [[ ! -z "$squashref" -a -d "$TUP_OBJDIR/layers/$squashref" ]]; then
+    if [[ ! -z "$squashref" && -d "$TUP_OBJDIR/layers/$squashref" ]]; then
         rm -r "$TUP_OBJDIR/layers/$squashref"
     fi
 }
