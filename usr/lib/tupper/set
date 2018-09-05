@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+name=$1
+opt=$2
+val=$3
+
+if [[ -z "$name" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <name> [ <option> <value> ]" >&2
+    exit 1
+fi
+
+if [[ ! -d "$TUP_IMGDIR/$name" ]]; then
+    echo "error: image doesn't exist: $name" >&2
+    exit 1
+fi
+
+if [[ -z "$opt" ]]; then
+
+    if [[ -f "$TUP_IMGDIR/$name/ephemeral" ]]; then
+        echo "ephemeral = yes"
+    else
+        echo "ephemeral = no"
+    fi
+
+    if [[ -f "$TUP_IMGDIR/$name/net" ]]; then
+        echo "net = $(cat "$TUP_IMGDIR/$name/net")"
+    fi
+
+    exit
+
+fi
+
+if [[ -z "$val" ]]; then
+    echo "error: no value specified" >&2
+    exit 1
+fi
+
+case "$opt" in
+
+    "net")
+        echo "$val" > "$TUP_IMGDIR/$name/net"
+        ;;
+
+    "ephemeral")
+        case "$val" in
+            "yes")
+                touch "$TUP_IMGDIR/$name/ephemeral" ;;
+            "no")
+                [ -f "$TUP_IMGDIR/$name/ephemeral" ] && rm "$TUP_IMGDIR/$name/ephemeral" ;;
+            *)
+                echo "error: expects a 'yes' or 'no' value" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+
+    *)
+        echo "error: unknown option: $opt" >&2
+        exit 1
+        ;;
+
+esac
+
+echo "$opt = $val" >&2

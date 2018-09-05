@@ -26,6 +26,7 @@ cat <<EOF >&2
 
 usage: $(basename $0) <cmd> [ <args> ... ]
 
+    ammend    Ammend a commit message for an existing object
     checkout  Create an image from an existing object
     commit    Commit the changes in an image to an object
     lineage   List all the ancestors of an image or object
@@ -35,8 +36,10 @@ usage: $(basename $0) <cmd> [ <args> ... ]
     revert    Revert an image to it's previous commit
     rm        Remove an object
     run       Boot or execute an image
+    set       Set an option for an image
     squash    Combine one or more related objects
     tag       Tag an object
+    unset     Unset an option for an image
     verify    Verify an object or lineage
 
 EOF

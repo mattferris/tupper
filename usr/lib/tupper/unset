@@ -1,0 +1,43 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+name=$1
+opt=$2
+val=$3
+
+if [[ -z "$val" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <name> <option> <value>" >&2
+    exit 1
+fi
+
+if [[ ! -d "$TUP_IMGDIR/$name" ]]; then
+    echo "error: image doesn't exist: $name" >&2
+    exit 1
+fi
+
+case "$opt" in
+
+    "net")
+        [ -f "$TUP_IMGDIR/$name/net" ] && rm "$TUP_IMGDIR/$name/net"
+        ;;
+
+    "ephemeral")
+        [ -f "$TUP_IMGDIR/$name/ephemeral" ] && rm "$TUP_IMGDIR/$name/ephemeral"
+        ;;
+
+    *)
+        echo "error: unknown option: $opt" >&2
+        exit 1
+        ;;
+
+esac
+
+echo "unset $opt" >&2
