@@ -79,7 +79,7 @@ done
 #
 
 if [[ -z "$TUP_OBJPATH" ]]; then
-    TUP_OBJPATH="~/containers/objects:/var/lib/tup/objects"
+    TUP_OBJPATH="~/containers/objects:/var/lib/tupper/objects"
 fi
 
 for path in $TUP_OBJPATH; do
@@ -95,7 +95,7 @@ done
 #
 
 if [[ -z "$TUP_IMGPATH" ]]; then
-    TUP_IMGPATH="~/containers/images:/var/lib/tup/images"
+    TUP_IMGPATH="~/containers/images:/var/lib/tupper/images"
 fi
 
 for path in $TUP_IMGPATH; do
