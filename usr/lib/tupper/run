@@ -10,7 +10,7 @@
 name=$1
 
 if [[ -z "$name" ]]; then
-    echo "usage: $TUP_FRONT_CMD $(basename $0) <name>" >&2
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <name> [ <cmd> ]" >&2
     exit 1
 fi
 
@@ -69,6 +69,10 @@ cmd=""
 if [[ -f "cmd" ]]; then
     boot=""
     cmd=$(cat cmd)
+elif [[ ! -z "$2" ]]; then
+    shift
+    boot=""
+    cmd="$@"
 fi
 
 netz=""
