@@ -33,11 +33,15 @@ if [[ -f "obj" ]]; then
     obj=$(cat obj)
 fi
 
-if [[ -z "$obj" || ! -d "fs" ]]; then
-    echo "error: nothing to revert: $name" >&2
-    exit 1
+echo -n "$name "
+if [[ ! -z "$obj" && -d "fs" && ! -z "$(ls fs/*)" ]]; then
+    echo -n "modified"
+else
+    echo -n "unmodified"
 fi
 
-rm -r "fs"
+if [[ ! -z "$obj" ]]; then
+    echo -n " since $obj"
+fi
 
-echo "reverted $name to $obj"
+echo
