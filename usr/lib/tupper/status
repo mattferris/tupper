@@ -44,4 +44,16 @@ if [[ ! -z "$obj" ]]; then
     echo -n " since $obj"
 fi
 
-echo
+objdir="$TUP_OBJDIR/layers/$obj"
+
+author=""
+if [[ -f "$objdir/author" ]]; then
+    author=$(cat "$objdir/author")
+fi
+
+msg=""
+if [[ -f "$objdir/msg" ]]; then
+    msg=$(cat "$objdir/msg")
+fi
+
+echo " <$author> $msg"
