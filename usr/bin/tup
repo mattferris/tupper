@@ -30,6 +30,7 @@ usage: $(basename $0) <cmd> [ <args> ... ]
     checkout  Create an image from an existing object
     commit    Commit the changes in an image to an object
     lineage   List all the ancestors of an image or object
+    list      List all images
     mount     Mount an image or object
     rebase    Rebase an image to a different object
     refparse  Parse an object hash partial or tag
@@ -38,6 +39,7 @@ usage: $(basename $0) <cmd> [ <args> ... ]
     run       Boot or execute an image
     set       Set an option for an image
     squash    Combine one or more related objects
+    status    Display the status of an image
     tag       Tag an object
     unset     Unset an option for an image
     verify    Verify an object or lineage
