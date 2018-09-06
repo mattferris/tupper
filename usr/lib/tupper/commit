@@ -61,7 +61,7 @@ if [[ ! -d "$TUP_OBJDIR/tags" ]]; then
     mkdir "$TUP_OBJDIR/tags"
 fi
 
-if [[ ! "$path" = "$name" ]]; then
+if [[ ! "$path" = "$name" || ! -z "$( echo "$path" | grep "^$TUP_OBJDIR" )" ]]; then
     mv fs "$TUP_OBJDIR/layers/$imgsum"
 else
     cp -rp "$path" "$TUP_OBJDIR/layers/$imgsum"
