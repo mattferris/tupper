@@ -75,9 +75,14 @@ elif [[ ! -z "$2" ]]; then
     cmd="$@"
 fi
 
+register="--register=no"
+if [[ -f "register" ]]; then
+    register="--register=yes"
+fi
+
 netz=""
 if [[ -f "net" ]]; then
     netz="--network-zone=$(cat "net")"
 fi
 
-systemd-nspawn $boot -nD mnt $netz --machine=$name $cmd
+systemd-nspawn $boot -nD mnt $netz $register --machine=$name $cmd
