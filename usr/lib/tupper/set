@@ -31,6 +31,12 @@ if [[ -z "$opt" ]]; then
         echo "ephemeral = no"
     fi
 
+    if [[ -f "$TUP_IMGDIR/$name/mountas" ]]; then
+        echo "mountas = $(cat "$TUP_IMGDIR/$name/mountas")"
+    else
+        echo "mountas = overlayfs"
+    fi
+
     if [[ -f "$TUP_IMGDIR/$name/net" ]]; then
         echo "net = $(cat "$TUP_IMGDIR/$name/net")"
     fi
@@ -63,6 +69,10 @@ case "$opt" in
                 exit 1
                 ;;
         esac
+        ;;
+
+    "mountas")
+        echo "$val" > "$TUP_IMGDIR/$name/mountas"
         ;;
 
     "net")

@@ -58,7 +58,11 @@ _reslayer() {
         exit 1
     fi
 
-    echo "$TUP_OBJDIR/layers/${obj}"
+    if [[ ! -z "$chain" ]]; then
+        chain="$chain:"
+    fi
+
+    chain="${chain}$TUP_OBJDIR/layers/${obj}=RO"
 
     if [[ ! -f "parent" ]]; then
         # if a stop was supplied, but wasn't encountered by the oldest ancestor, error out
@@ -86,10 +90,11 @@ _reslayer() {
     _reslayer $parent $chain
 }
 
-upper=""
+layers=""
+
 if [[ -d "$TUP_IMGDIR/$name" ]]; then
     if [[ -d "$TUP_IMGDIR/$name/fs" ]]; then
-        upper="$TUP_IMGDIR/$name/fs"
+        layers="$TUP_IMGDIR/$name/fs=RW"
     fi
 
     if [[ -f "$TUP_IMGDIR/$name/obj" ]]; then
@@ -99,15 +104,13 @@ else
     obj=$("$TUP_BINDIR/refparse" "$name")
 fi
 
-type="overlayfs"
-if [[ -f "$TUP_IMGDIR/$name/mountas" ]]; then
-    ttype=$(cat "$TUP_IMGDIR/$name/mountas")
-    if [[ -x "$TUP_BINDIR/mount.$ttype" ]]; then
-        type=$ttype
-    else
-        echo "error: unsupported mount type: $ttype" >&2
-        exit 1
-    fi
+if [[ ! -z "$layers" ]]; then
+    layers="$layers:"
 fi
 
-echo -e "$(_reslayer $obj)" | "$TUP_BINDIR/mount.$type" "$target" "$upper" "$TUP_IMGDIR/$name"
+layers="${layers}$(_reslayer $obj)"
+
+if ! ( unionfs -o cow,allow_other $layers $target ); then
+    echo "error: failed to prepare filesystem" >&2
+    exit 1
+fi

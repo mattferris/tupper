@@ -1,0 +1,49 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+target=$1
+upper=$2
+base=$3
+
+if [[ -z "$target" || ( ! -z "$upper" && -z "$base" ) ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <target> [ <upperdir> <basedir> ]" >&2
+    exit 1
+fi
+
+if [[ ! -d "$target" ]]; then
+    echo "error: target directory doesn't exist: $target" >&2
+    exit 1
+fi
+
+if [[ ! -d "$base" ]]; then
+    echo "error: base directory doesn't exist: $base" >&2
+    exit 1
+fi
+
+if [[ ! -d "$base/.overlayfs" ]]; then
+    mkdir "$base/.overlayfs"
+fi
+
+lower=""
+while read in; do
+    if [[ ! -z "$lower" && ! -z "$in" ]]; then
+        lower="$lower:"
+    fi
+    lower="$lower$in"
+done
+
+opts="lowerdir=$lower"
+
+if [[ ! -z "$upper" ]]; then
+    opts="$opts,upperdir=$upper,workdir=$base/.overlayfs"
+fi
+
+mount -t overlay overlay -o "$opts" "$target"

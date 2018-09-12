@@ -29,6 +29,10 @@ case "$opt" in
         [ -f "$TUP_IMGDIR/$name/ephemeral" ] && rm "$TUP_IMGDIR/$name/ephemeral"
         ;;
 
+    "mountas")
+        [ -f "$TUP_IMGDIR/$name/mountas" ] && rm "$TUP_IMGDIR/$name/mountas"
+        ;;
+
     "net")
         [ -f "$TUP_IMGDIR/$name/net" ] && rm "$TUP_IMGDIR/$name/net"
         ;;
