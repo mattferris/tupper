@@ -3,62 +3,84 @@ tupper
 
 tupper helps to build and manage container images primarily for use with
 integration testing. Containers can be built in a layered manner, with multiple
-images sharing common filesystems for efficiency. Under the hood, `unionfs` and
-`systemd-nspawn` are used to provision the container instances.
+images sharing common filesystems for efficiency. Under the hood,
+`systemd-nspawn` and `overlayfs` are used to provision the container instances.
 
-Setup
------
+Installing
+----------
 
-Clone the repo into `/root/containers`. This is currently a hardcoded path, and
-therefore required.
+### Via source
 
 ```
-# git clone git@github.com/mattferris/tupper.git /root/containers
+# git clone git@github.com/mattferris/tupper.git tupper
+# cp -p tupper/usr/bin/tup /usr/bin/
+# cp -rp tupper/usr/lib/tupper /usr/lib/
+# cp -rp tupper/var/lib/tupper /var/lib/
+# apt-get install systemd-container
 ```
 
-For now, all commands must be run from `/root/containers`.
+### Via pre-built package
+
+```
+# wget -O- https://pkg.bueller.ca/debian/pkg.bueller.ca.gpg > /etc/apt/trusted.gpg.d/pkg.bueller.ca.gpg
+# echo "deb http://pkg.bueller.ca/debian stretch main" > /etc/apt/sources.list.d/pkg.bueller.ca.list
+# apt-get update && apt-get install tupper
+```
 
 In the beginning...
 -------------------
 
 The easiest way to get started is to use `debootstrap` to prepare the container's
-initial filesystem. We'll install the new system into a new container image.
+initial filesystem.
 
 ```
 # apt-get install debootstrap
-# mkdir -p /root/containers/img/deb9-amd64/fs
-# deboostrap stable /root/containers/img/deb9/fs
+# deboostrap stable /home/user/debian9
 ```
 
-As you can see, the container's filesystem lives in the `fs` folder within the
-image folder.
-
-Make sure you can boot the image.
-
-```
-# cd /root/containers
-# ctl/run deb9
-```
-
-`ctl/run` should attempt to boot the container image, eventually supplying you
-with a console login prompt. You can kill the container by pressing `^]` or
-(ctrl+]) three times.
-
-By default, the root account is disabled, so we need to set it to a known
-password. This is easily done by copying a password from `/etc/shadow` on a
-known system and pasting it into `root`'s password field in `/root/containers/img/deb9/fs/etc/shadow`.
-
-Now boot the system again to make sure you can login. Once logged in, just run
-`halt` to stop the container.
-
-Take a peek inside the container's image folder.
+Before we can create a container based on this filesystem, we'll need to *commit*
+it. This adds the filesystem to tupper's object store. When committed, tupper
+takes a checksum of the filesystem which it can use to verify the filesystem's
+integrity. An optional message can be provided during the commit.
 
 ```
-# ls img/deb9
-fs
+# tup commit /home/user/debian9 "Debian 9 base install"
+commited 6f89a622d606a69e06621d818598e584249f5154 (/home/user/debian9)
 ```
 
-Currently, the folder just contains the filesystem folder.
+Now we can create an image based on the newly commited layer.
+
+```
+# tup create 6f89 foo
+created /var/lib/tupper/images/foo from 6f89a622d606a69e06621d818598e584249f5154
+```
+
+Layers are identified by their checksums. For simplicity, only part of the
+checksum is required. In the above example, tupper will expland `6f89` to the
+actual layer ID `6f89a622d606a69e06621d818598e584249f5154`.
+
+Finally, we can run the container.
+
+```
+# tup run foo
+```
+
+Tupper will boot the container image, eventually supplying you with a console
+login prompt. There's no root password set by default, so it's not possible to
+login at the moment. You can kill the container by pressing `^]` or (ctrl+])
+three times.
+
+To change the password, we can run the container in a different way. Instead of
+booting the container, we can simply run a command in the container's
+namespace. This is done by supplying the command when running the container.
+
+```
+# tup run foo /bin/bash
+```
+
+This will give you a bash shell within the container, and allow you to change
+the root password via `passwd`. Once done, type `exit` or (ctrl+d) to exit the
+shell and stop the container.
 
 Perfect! You're first container is up and running. Now is probably a good time
 to commit this image and use it as a base for the rest of your images.
@@ -70,14 +92,14 @@ Committing an image is like taking a snapshot of it's filesystem. Once an image
 is committed, you can always return to the snapshot at a later date. You can
 also build additional images using the snapshot as a base.
 
-First, let's commit the changes in the `deb9` image.
+First, let's commit the changes in the `foo` image.
 
 ```
-# ctl/commit deb9 'committing base image for debian 9 (stretch)'
-committed e95e7547cff2042631b52e9c19da74212fb8d28b (deb9)
+# tup commit foo 'set root password'
+committed e95e7547cff2042631b52e9c19da74212fb8d28b (foo)
 ```
 
-Once complete, the command will display the commit ID. This is a SHA1 checksum
+Once complete, the command will display the layer ID. This is a SHA1 checksum
 that can be used to verify the contents of the commit. This ensures that you're
 able to confirm that the contents of the commit is that same as when it was
 originally committed.
@@ -85,31 +107,29 @@ originally committed.
 Verifying a commit is easy.
 
 ```
-# ctl/verify e95e7547cff2042631b52e9c19da74212fb8d28b
+# tup verify e95e
 verifying e95e7547cff2042631b52e9c19da74212fb8d28b
 layer e95e7547cff2042631b52e9c19da74212fb8d28b ok
+layer 6f89a622d606a69e06621d818598e584249f5154 ok
 verification successful
 ```
 
-Notice that contents of the image folder has changed.
+Layers are linked to their parents. In this case, `6f89` is the parent of
+`e95e`. A layers checksum is based on the checksum of it's filesystem and it's
+parents checksum. This means that a layer is only valid if all it's ancestors
+are also valid. You can see a layers ancestry (or *lineage*) like so:
 
 ```
-# ls img/deb9
-obj
+# tup lineage e95e
+e95e7547cff2042631b52e9c19da74212fb8d28b <root@example> set root password
+6f89a622d606a69e06621d818598e584249f5154 <root@example> Debian 9 base image
 ```
 
-Instead of the filesystem folder `fs`, it contains an `obj` file.
+Let's clean up a bit and remove the `foo` image.
 
 ```
-# cat img/deb9/obj
-e95e7547cff2042631b52e9c19da74212fb8d28b
+# tup rm foo
 ```
-
-When the image was committed, it's filesystem was moved to a commit object, and
-the image was updated with a pointer to the commit. The commit object can be
-found in `/root/containers/obj/e95e7547cff2042631b52e9c19da74212fb8d28b`. The
-contents of the `/root/containers/obj` folder is very much a "look, don't touch"
-type of environment, as it's contents is managed by various commands.
 
 Now, how can all this be used to your advantage?
 
@@ -118,76 +138,62 @@ Layers, like an onion
 
 Say you have a project, call it *project-x*. You need a convenient way of
 testing your progress that won't break your existing system. Containers provide
-a lightweight, flexible solution. You've already built a basic debian image, so
-why not extend that image further to suit your needs?
+a lightweight, flexible solution. You've already prepared a basic image with a
+root password, why not extend that image further to suit your needs?
 
-Create a new image based off of the `deb9` image we already created.
-
-```
-# ctl/checkout deb9 img/project-x
-checked out e95e7547cff2042631b52e9c19da74212fb8d28b to project-x
-```
-
-Now you have an new image based on the latest commit of the `deb9` image. The
-contents of the image is just an `obj` file with the commit ID.
+Create a new image based off of the latest commit made from the `foo` image.
 
 ```
-# cat img/project-x/obj
-e95e7547cff2042631b52e9c19da74212fb8d28b
+# tup create foo project-x
+created /var/lib/tupper/images/project-x from e95e7547cff2042631b52e9c19da74212fb8d28b
+```
+
+Now you have an new image based on the latest commit of the `foo` image. Even
+though we removed the `foo` image, tupper still knows the last commit the image
+as pointing to. This is because when a commit is made on an image, tupper
+creates a *tag* pointing at the layer ID. You can view tags and their related
+layer IDs like so:
+
+```
+# tup tag
+foo -> e95e7547cff2042631b52e9c19da74212fb8d28b
 ```
 
 *Project-x* has a few dependecies that need to be installed before we can start
 using the container for testing. Before we can do that though, we need to setup
-networking. Boot the new image.
+networking. In particular, we need to specify a bridge interface to connect the
+container to. Let's assume `br0` is available, and bridges onto to DHCP network.
 
 ```
-# ctl/run project-x
+# tup set project-x net br0
 ```
 
-Once logged in, create the file `/etc/networking/interfaces.d/host0` with the
-following.
+Launch a shell in the container to configure the interface to use DHCP.
 
 ```
-auto host0
+# tup run project-x /bin/bash
+# cat <<EOF > /etc/networking/interfaces.d/host0
+allow-hotplug host0
 iface host0 inet dhcp
+EOF
 ```
 
-This assumes you're network has DHCP available.
-
-Reboot the container to load the changes.
-
-```
-# reboot
-```
-
-Login once again, and install the dependecies.
+Without exiting the shell, let's bring up the interface and install the
+dependencies as well.
 
 ```
+# ifup host0
 # apt-get install rsync less cowsay
 ```
 
-Now halt the container to stop it.
-
-```
-# halt
-```
+Finally, exit the shell.
 
 Nice, everything is ready for testing now. Before that though, let's make sure
 we commit the image to ensure we can undo the changes from our test runs.
 
 ```
-# ctl/commit project-x 'setup, and ready to go'
+# tup commit project-x 'setup, and ready to go'
 committed 00bb86a10fcec0d1fd9fd1388fefe7fef3bb0ee6 (project-x)
-```
-
-Our image now contains a number of layers (two, for now). It's possible to view
-the layers (or *lineage*) of the image.
-
-```
-# ctl/lineage project-x
-project-x
-00bb86a10fcec0d1fd9fd1388fefe7fef3bb0ee6 <root@example.com> setup, and ready to go
-e95e7547cff2042631b52e9c19da74212fb8d28b <root@example.com> committing base image for debian 9 (stretch)
 ```
 
 Finally, let's see how we this all comes together to enable re-producible test
