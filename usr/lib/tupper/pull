@@ -1,0 +1,20 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+host=$1
+ref=$2
+
+if [[ -z "$ref" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <host> <ref>" >&2
+    exit 1
+fi
+
+ssh $TUP_SSHOPTS "$host" tup send "$ref" | tup receive "$ref"

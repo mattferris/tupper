@@ -1,0 +1,28 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+ref=$1
+
+if [[ -z "$ref" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <ref>" >&2
+    exit 1
+fi
+
+tref=$("$TUP_BINDIR/refparse" "$ref")
+if [[ -z "$tref" ]]; then
+    echo "error: ref doesn't exist: $ref" >&2
+    exit 1
+fi
+
+cd "$TUP_OBJDIR/layers"
+
+fs=$(cat "$tref/fs")
+tar cz "$tref" "fs"

@@ -1,0 +1,62 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+me=$$
+medir="$TUP_OBJDIR/layers/.$me"
+
+ref=$1
+
+if [[ -z "$ref" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <ref>" >&2
+    exit 1
+fi
+
+if [[ -d "$medir" ]]; then
+    echo "error: working directory already exists: $medir"
+    exit 1
+fi
+
+
+mkdir "$TUP_OBJDIR/layers/.$me"
+cd "$medir"
+
+if ! (cat /dev/stdin | tar xz); then
+    rm -r "$medir"
+    echo "error: failed reading input" >&2
+    exit 1
+fi
+
+if [[ ! -d "$ref" ]]; then
+    rm -r "$medir"
+    echo "error: received data doesn't contain ref: $ref" >&2
+    exit 1
+fi
+
+if [[ ! -f "$ref/fs" ]]; then
+    rm -r "$medir"
+    echo "error: missing layer filesystem for ref: $ref" >&2
+    exit 1
+fi
+
+fs=$(cat "$ref/fs")
+fssum=$( cd "$fs" && tar c * | sha1sum | cut -d\  -f1 )
+
+if [[ ! "$fs" = "$fssum" ]]; then
+    rm -r "$medir"
+    echo "error: failed to verify filesystem for ref: $ref" >&2
+    exit 1
+fi
+
+mv "$ref" "$fs" "$TUP_OBJDIR/layers/"
+
+rm -r "$medir"
+
+echo "received $ref"
