@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+(
+for tag in $(ls -1 "$TUP_OBJDIR/tags"); do
+    ref=$(cat "$TUP_OBJDIR/tags/$tag")
+    "$TUP_BINDIR/lineage" "$ref"
+done
+) | sort | uniq
