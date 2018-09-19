@@ -13,8 +13,8 @@ target=$1
 upper=$2
 base=$3
 
-if [[ -z "$target" || ( ! -z "$upper" && -z "$base" ) ]]; then
-    echo "usage: $TUP_FRONT_CMD $(basename $0) <target> [ <upperdir> <basedir> ]" >&2
+if [[ -z "$target" ]]; then
+    echo "usage: $TUP_FRONT_CMD $(basename $0) <target> [ <upperdir> [ <basedir> ] ]" >&2
     exit 1
 fi
 
@@ -23,13 +23,9 @@ if [[ ! -d "$target" ]]; then
     exit 1
 fi
 
-if [[ ! -d "$base" ]]; then
-    echo "error: base directory doesn't exist: $base" >&2
-    exit 1
-fi
-
-if [[ ! -d "$base/.overlayfs" ]]; then
-    mkdir "$base/.overlayfs"
+if [[ -z "$base" ]]; then
+    sum=$( echo "$target" | sha1sum | cut -d\  -f1 )
+    base="$TUP_TMPDIR/$sum"
 fi
 
 lower=""
@@ -43,7 +39,13 @@ done
 opts="lowerdir=$lower"
 
 if [[ ! -z "$upper" ]]; then
+
+    if [[ ! -d "$base" ]]; then
+        mkdir -p "$base"
+    fi
+
     opts="$opts,upperdir=$upper,workdir=$base/.overlayfs"
+
 fi
 
 mount -t overlay overlay -o "$opts" "$target"

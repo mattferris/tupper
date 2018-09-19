@@ -111,6 +111,22 @@ done
 
 
 #
+# Discover path to tmp directory
+#
+
+if [[ -z "$TUP_TMPPATH" ]]; then
+    TUP_TMPPATH="~/containers/tmp:/var/lib/tupper/tmp"
+fi
+
+for path in $TUP_TMPPATH; do
+    path=$(eval echo ${path//>})
+    if [[ -d "$path" ]]; then
+        export TUP_TMPDIR=$path
+    fi
+done
+
+
+#
 # Exec the subcommand or error
 #
 
