@@ -1,0 +1,62 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+trap tup_error ERR
+
+ref=$1
+
+if [[ -z "$ref" ]]; then
+    cat <<EOF >&2
+
+usage: $TUP_FRONT_CMD $(basename $0) <ref>
+
+Mount a layer.
+
+Arguments:
+
+    ref  The ID of the layer to mount
+
+EOF
+    exit 1
+fi
+
+#
+# check prerequisites
+#
+
+if ! layerid=$(tup refparse "$ref" --type layer); then
+    echo "error: layer doesn't exist: $ref" >&2
+    exit 2
+fi
+
+#
+# mount layer
+#
+
+if ! format=$(tup_conf get layer "$layerid" format); then
+    echo "error: unable to get format of layer: $layerid" >&2
+    exit 4
+fi
+
+if ! (tup volume mount "$format" "$TUP_STORAGE_DIR/layers/$(tup_path "$layerid")/fs); then
+    echo "error: unable to mount layer: $layerid" >&2
+    exit 4
+fi
+
+echo "mounted layer $layerid"
+exit 0

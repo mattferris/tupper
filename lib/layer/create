@@ -1,0 +1,155 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+_cleanup() {
+    tup_debug 1 "cleaning up"
+    if [[ ! -z "$tmpdir" && -d "$tmpdir" ]]; then
+        rm -r "$tmpdir" 2>&1 >/dev/null
+    fi
+}
+trap _cleanup KILL EXIT
+trap tup_error ERR
+
+tup_parseargs "$@"
+
+path=$1
+
+if [[ -z "$path" ]]; then
+    cat <<EOF >&2
+
+usage: $TUP_FRONT_CMD $(basename $0) <path> [ --labels <label>,... ] [ --format <format> ] [ --squashfs-opts <opts> ] [ --tar-opts <opts> ]
+
+Create a new layer, using <path> as it's filesystem.
+
+Arguments:
+
+    path      The path containing the layer's filesystem
+    --format  The format for the filesystem: plain (default), squashfs, or tgz
+    --label   Labels to apply to the layer
+
+    --squashfs-opts
+              Options to pass to squashfs
+
+    --tar-opts
+              Options to pass to tar
+
+EOF
+    exit 1
+fi
+
+#
+# check prerequisites
+#
+
+if [[ ! -d "$path" ]]; then
+    echo "error: path doesn't exist: $path" >&2
+    exit 2
+fi
+
+
+#
+# create the layer directory
+#
+
+tmpid=$(tup_sum_str $path $(date))
+tmpdir="$TUP_STORAGE_DIR/staging/$tmpid"
+
+if ! (mkdir -p "$tmpdir"); then
+    echo "error: failed to create temporary layer directory: $tmpdir" >&2
+    exit 3
+fi
+tup_debug 1 "created temporary layer directory $tmpdir"
+
+#
+# import filesystem into specified format
+#
+
+format="squashfs"
+if [[ ! -z "$tuparg_format" ]]; then
+    format=$tuparg_format
+fi
+
+touch "$tmpdir/conf"
+
+case $format in
+
+    plain)
+        if ! (cp -rp "$path" "$tmpdir/fs"); then
+            echo "error: failed to copy path: $path" >&2
+            exit 3
+        fi
+        tup_debug 1 "copied $path to $tmpdir/fs"
+        tup_conf set path "$tmpdir/conf" format plain
+        fssum=$(tup_sum_dir "$tmpdir/fs")
+        ;;
+
+    squashfs)
+        tup_debug 2 "mksquashfs $path $tmpdir/fs -no-progress $tuparg_squashfs_opts"
+        if ! (mksquashfs "$path" "$tmpdir/fs" -no-progress $tuparg_squashfs_opts 2>&1 >/dev/null); then
+            echo "error: failed to create squashfs from path: $path" >&2
+            exit 3
+        fi
+        tup_debug 1 "created squashfs from $path"
+        tup_conf set path "$tmpdir/conf" format squashfs
+        fssum=$(tup_sum_file "$tmpdir/fs")
+        ;;
+
+    tgz)
+        tup_debug 2 "tar czf $tmpdir/fs --acls --xattr $tuparg_tar_opts $path"
+        if ! (tar czf "$tmpdir/fs" --acls --xattr $tuparg_tar_opts "$path" 2>&1 >/dev/null); then
+            echo "error: failed to create tarball from path: $path" >&2
+            exit 3
+        fi
+        tup_debug 1 "create tarball from $path"
+        tup_conf set path "$tmpdir/conf" format tgz
+        fssum=$(tup_sum_file "$tmpdir/fs")
+        ;;
+
+    *)
+        echo "error: invalid format specified: $format" >&2
+        exit 1
+        ;;
+
+esac
+
+tup_conf set path "$tmpdir/conf" checksum $fssum
+tup_conf set path "$tmpdir/conf" date $(date --iso-8601=seconds)
+
+if [[ ! -z "$tuparg_labels" ]]; then
+    tup_conf set path "$tmpdir/conf" labels $(echo $tuparg_labels | tr , \ )
+fi
+
+layerid=$(tup_sum_dir "$tmpdir")
+tup_debug 1 "calculated layer checksum $layerid"
+
+path=$(tup_path $layerid)
+pdir=$(dirname $path);
+
+if ! (mkdir -p "$TUP_STORAGE_DIR/layers/$pdir"); then
+    echo "error: failed to create container parent directory: $TUP_STORAGE_DIR/layers/$pdir" >&2
+    exit 3
+fi
+
+if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/layers/$pdir/$layerid"); then
+    echo "error: failed to create container dir $TUP_STORAGE_DIR/layers/$path" >&2
+    exit 3
+fi
+tup_debug 1 "moved $tmpdir to $TUP_STORAGE_DIR/layers/$path"
+
+echo "created layer $layerid"
+exit 0

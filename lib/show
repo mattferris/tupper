@@ -1,0 +1,67 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+trap tup_error ERR
+
+tup_parseargs "$@"
+
+if [[ -z "$tuparg_type" && ! "$(dirname $0)" = "$TUP_LIB_DIR" ]]; then
+    tuparg_type=$(basename $(dirname $0))
+fi
+
+ref=$1
+
+if [[ -z "$tuparg_type" ]]; then
+    cat <<EOF >&2
+
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --type <type> ]
+
+Show object details.
+
+Arguments:
+
+    --type  The type of object to list: container, image, layer, or volume
+
+EOF
+    exit 1
+fi
+
+case $tuparg_type in
+    container) ;;
+    image) ;;
+    layer) ;;
+    volume) ;;
+    *)
+        echo "error: invalid object type specified: $tuparg_type" >&2
+        exit 1
+        ;;
+esac
+
+#
+# prerequisites
+#
+
+# resolve object ID
+if ! objid=$(tup refparse "$ref" --type $tuparg_type); then
+    echo "error: $type doesn't exist: $ref" >&2
+    exit 2
+fi
+
+tup_conf show $tuparg_type $objid
+
+exit 0

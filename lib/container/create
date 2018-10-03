@@ -1,0 +1,100 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+_cleanup() {
+    tup_debug 1 "cleaning up"
+    if [[ ! -z "$tmpdir" && -d "$tmpdir" ]]; then
+        rm -r "$tmpdir" 2>&1 >/dev/null
+    fi
+}
+trap _cleanup KILL EXIT
+trap tup_error ERR
+
+name=$1
+image=$2
+
+if [[ -z "$image" ]]; then
+    cat <<EOF >&2
+
+usage: $TUP_FRONT_CMD $(basename $0) <name> [ <ref> ]
+
+Create a new container named <name>, based of an image of the same name. If
+<ref> is specified, base the container on that image instead.
+
+Arguments:
+
+    name  The name the container
+    ref   The name or ID of the image to base the container on
+
+EOF
+    exit 1
+fi
+
+#
+# check prerequisites
+#
+
+# if an alternate image wasn't specified, assume <name>
+if [[ -z "$image" ]]; then
+    image=$name
+fi
+
+# does the referenced image exist?
+imageref=$(tup image ref "$image")
+if [[ ! $? ]]; then
+    echo "error: image doesn't exist: $image" >&2
+    exit 2
+fi
+
+containerid=$(tup_sum_str "$name $imageref")
+tmpdir="$TUP_STORAGE_DIR/staging/$containerid"
+
+# does a container with this name already exist?
+if [[ -d "$TUP_STORAGE_DIR/containers/$containerid" ]]; then
+    echo "error: container already exists: $name" >&2
+    exit 2
+fi
+
+#
+# create the container directory and populate with defaults
+#
+
+if ! (mkdir -p "$tmpdir"); then
+    echo "error: failed to create container directory: $tmpdir" >&2
+    exit 3
+fi
+
+touch "$tmpdir/conf"
+tup_conf set path "$tmpdir/conf" name $name
+tup_conf set path "$tmpdir/conf" parent $imageref
+
+path=$(tup_path $containerid)
+pdir=$(dirname $path);
+
+if ! (mkdir -p "$TUP_STORAGE_DIR/containers/$pdir"); then
+    echo "error: failed to create container parent directory: $TUP_STORAGE_DIR/containers/$pdir" >&2
+    exit 3
+fi
+
+if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/containers/$pdir"); then
+    echo "error: failed to create container dir $TUP_STORAGE_DIR/containers/$path" >&2
+    exit 3
+fi
+
+echo "created container $name ($containerid)"
+exit 0

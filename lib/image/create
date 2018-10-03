@@ -1,0 +1,121 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$(dirname $0)/../includes/common.inc"
+
+_cleanup() {
+    tup_debug 1 "cleaning up"
+    if [[ ! -z "$tmpid" && -d "$tmpdir" ]]; then
+        rm -r "$tmpdir" 2>&1 >/dev/null
+    fi
+}
+trap _cleanup KILL EXIT
+trap tup_error ERR
+
+tup_parseargs "$@"
+
+name=$1
+
+if [[ -z "$tuparg_layer" && -z "$tuparg_path" ]]; then
+    cat <<EOF >&2
+
+usage: $TUP_FRONT_CMD $(basename $0) <name> { --layer <ref> | --path <path> } [ --labels <label>,... ]
+
+Create a new image named <name>, using either layer <ref> or the contents of
+<path> as it's filesystem.
+
+Arguments:
+
+    name      The name the image
+    --labels  Labels to apply to the image
+    --layer   The layer ref to use as the image's filesystem
+    --path    The path containing the image's filesystem
+
+EOF
+    exit 1
+fi
+
+if [[ ! -z "$tuparg_layer" && ! -z "$tuparg_path" ]]; then
+    echo "error: either '--layer' or '--path' can be specified, not both" >&2
+    exit 1
+fi
+
+#
+# check prerequisites
+#
+
+if [[ ! -z "$tuparg_path" && ! -d "$tuparg_path" ]]; then
+    echo "error: path doesn't exist: $tuparg_path" >&2
+    exit 2
+fi
+
+if [[ ! -z "$tuparg_layer" ]] && ! layerid=$(tup refparse "$tuparg_layer"; then
+    echo "error: layer doesn't exist: $ref" >&2
+    exit 2
+fi
+
+#
+# create the container directory and populate with defaults
+#
+
+if [[ -z "$layerid" ]]; then
+    # create the new layer
+    if ! layerid=$(tup layer init "$tuparg_path"); then
+        echo "error: failed to initialize image: $name" >&2
+        exit 4
+    fi
+else
+    if ! layerid=$(tup refparse layer "$tuparg_layer"); then
+        echo "error: layer doesn't exist; $tuparg_layer" >&2
+        exit 2
+    fi
+    tup_debug 1 "using existing layer $layerid"
+fi
+
+tmpid=$(tup_sum_str $name $(date))
+tmpdir="$TUP_STORAGE_DIR/staging/$tmpid"
+
+if ! (mkdir -p "$tmpdir"); then
+    echo "error: failed to create temporary image directory: $tmpdir" >&2
+    exit 3
+fi
+tup_debug 1 "created temporary image directory $tmpdir"
+
+touch "$tmpdir/conf"
+tup_conf set path "$tmpdir/conf" name $name
+tup_conf set path "$tmpdir/conf" volumes $layerid
+
+if [[ ! -z "$tuparg_labels" ]]; then
+    tup_conf set path "$tmpdir/conf" labels $(echo $tuparg_labels | tr , \ )
+fi
+
+imageid=$(tup_sum_dir "$tmpdir")
+path=$(tup_path "$imageid")
+pdir=$(dirname $path);
+
+if ! (mkdir -p "$TUP_STORAGE_DIR/images/$pdir"); then
+    echo "error: failed to create images parent directory: $TUP_STORAGE_DIR/images/$pdir" >&2
+    exit 3
+fi
+
+if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/containers/$pdir/$imageid"); then
+    echo "error: failed to create image dir $TUP_STORAGE_DIR/images/$path" >&2
+    exit 3
+fi
+tup_debug 1 "moved $tmpdir to "$TUP_STORAGE_DIR/images/$path"
+
+echo "created image $name ($imageid)"
+exit 0

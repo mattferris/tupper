@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+usage: tup layer list [ --with-label <label> ] [ --date ] [ --detail ] [ --format ] [ --id-only ] [ --labels ] [ --long-ids ] [ --type <type> ]
+
+List objects. If --label is specified, list objects labelled with <label>.
+
+Arguments:
+
+    General options:
+
+        --type  The type of object to list: container, image, layer, or volume
+
+    Filter options:
+
+        --with-label  List objects labelled with <label>
+
+    Display options:
+
+        --date        Show creation date and time
+        --detail      Implies --date and --labels
+        --format      Show layer format
+        --id-only     Only dislay object IDs (implies --long)
+        --labels      Show object labels
+        --long-ids    Show full object IDs instead of partials ones
+
+exec "$TUP_LIB_DIR/list" $@ --type layer

@@ -1,0 +1,67 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+trap tup_error ERR
+
+tup_parseargs $@
+ref=$1
+
+if [[ -z "$ref" || -z "$tuparg_type" ]]; then
+    cat <<EOF >&2
+
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --type <type> ]
+
+Resolve a partial ID into a full ID.
+
+Arguments:
+
+    ref     The name or ID of the object
+    --type  The object type: container, image, layer, or volume
+
+EOF
+    exit 1
+fi
+
+case $tuparg_type in
+
+    container) searchdir="$TUP_STORAGE_DIR/containers";;
+        image) searchdir="$TUP_STORAGE_DIR/images";;
+        layer) searchdir="$TUP_STORAGE_DIR/layers";;
+       volume) searchdir="$TUP_STORAGE_DIR/volumes";;
+
+    *)
+        echo "error: invalid object type specified: $tuparg_type" >&2
+        exit 2
+        ;;
+
+esac
+
+# use find to search for the ref
+results=$(find "$searchdir" -mindepth 2 -maxdepth 2 -name "$ref*")
+
+# make sure we only have one result
+if [[ -z "$results" ]]; then
+    echo "error: ref not found: $ref" >&2
+    exit 10
+fi
+if [[ "$(echo "$results" | wc -l)" != "1" ]]; then
+    echo "error: ref resolved to more than one object: $ref" >&2
+    exit 11
+fi
+
+echo $(basename $results)

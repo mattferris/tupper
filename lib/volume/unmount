@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+trap tup_error ERR
+
+ref=$1
+
+if [[ -z "$ref" ]]; then
+    cat <<EOF >&2
+
+usage: $TUP_FRONT_CMD $(basename $0) <ref>
+
+Unmount a volume.
+
+Arguments:
+
+    ref  The volume to unmount
+
+EOF
+    exit 1
+fi
+
+if ! volumeid=$(tup refparse "$ref"); then
+    echo "error: volume doesn't exist: $volumeid" >&2
+    exit 2
+fi
+
+format=$(tup_conf get volume $volumeid format)
+path="$TUP_STORAGE_DIR/volumes/$(tup_path "$volumeid")/mount"
+case $format in
+
+    plain)
+        ;;
+
+    squashfs)
+        if ! (umount "$path"); then
+            echo "error: failed to unmount squashfs: $path" >&2
+            exit 3
+        fi
+        ;;
+
+    tgz)
+        ;;
+
+    *)
+        echo "error: unknown format specified: $format" >&2
+        exit 2
+        ;;
+
+esac
+
+if ! (rm -r "$path"); then
+    echo "error: failed to remove volume directory: $path" >&2
+    exit 3
+fi
+
+echo "unmounted volume $volumeid"
+exit 0

@@ -1,0 +1,99 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+IFSBAK=$IFS
+
+export TUP_FRONT_CMD=$(basename "$0")
+
+if [[ -z "$1" ]]; then
+cat <<EOF >&2
+
+usage: $(basename $0) <cmd> [ <args> ... ]
+
+    container  Container management context
+    image      Image management context
+    layer      Layer management context
+    volume     Volume management context
+
+EOF
+exit 1
+fi
+
+#
+# Discover path to subcommands
+#
+
+if [[ -z "$TUP_LIB_PATH" ]]; then
+    TUP_LIB_PATH="/usr/lib/tupper"
+fi
+
+cmd=$1
+shift
+
+IFS=":"
+for path in $TUP_LIB_PATH; do
+    path=$(eval echo ${path//>})
+    cmdpath="$path/$cmd"
+    if [[ -x "$cmdpath" ]]; then
+        export TUP_LIB_DIR=$path
+    fi
+done
+
+
+#
+# Discover path to config directory
+#
+
+if [[ -z "$TUP_CONFIG_PATH" ]]; then
+    TUP_CONFIG_PATH="/etc/tupper"
+fi
+
+for path in $TUP_CONFIG_PATH; do
+    path=$(eval echo ${path//>})
+    if [[ -d "$path" ]]; then
+        export TUP_CONFIG_DIR=$path
+    fi
+done
+
+
+#
+# Discover path to storage
+#
+
+if [[ -z "$TUP_STORAGE_PATH" ]]; then
+    TUP_STORAGE_PATH="/var/lib/tupper"
+fi
+
+for path in $TUP_STORAGE_PATH; do
+    path=$(eval echo ${path//>})
+    if [[ -d "$path" ]]; then
+        export TUP_STORAGE_DIR=$path
+    fi
+done
+
+
+#
+# Exec the subcommand or error
+#
+
+if [[ -d "$TUP_LIB_DIR/$cmd" && "$cmd" != "includes" ]]; then
+    TUP_FRONT_CMD="$TUP_FRONT_CMD $cmd"
+    cmd="$cmd/$1"
+    shift
+fi
+
+if [[ -x "$TUP_LIB_DIR/$cmd" && "$cmd" != "includes" ]]; then
+    IFS=$IFSBAK
+    exec "$TUP_LIB_DIR/$cmd" $@
+else
+    echo "error: unknown command: $cmd" >&2
+    exit 1
+fi
+

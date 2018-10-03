@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$(dirname $0)/includes/common.inc"
+
+trap tup_error ERR
+
+if [[ "$1" = "--help" ]]; then
+    cat <<EOF >&2
+
+usage: $TUP_FRONT_CMD $(basename $0) [ <arg> ... ]
+
+Generate a checksum from the supplied arguments. If no arguments are specified
+then generate a checksum of the contents of the current directory.
+
+EOF
+    exit 1
+fi
+
+tup_sum $@
