@@ -171,6 +171,86 @@ tup_parseargs() {
     done
 }
 
+# return next parsed argument
+tup_getopt_required=()
+tup_getopt_optional=()
+tup_getopt_matched=()
+tup_getopt_args=($@)
+tup_getopt_name=""
+tup_getopt_value=""
+tup_getopt_pos=0
+tup_getopt() {
+
+    # bail if no remaining arguments
+    if [[ ${#tup_getopt_args[@]} = 0 ]]; then
+        return 1
+    fi
+
+    # determine next argument
+    local cur=${tup_getopt_args[0]}
+    if [[ "${cur:0:2}" = "--" ]]; then
+        tup_getopt_name=${cur#--}
+        tup_debug 4 "tup_getopt: found option: $tup_getopt_name"
+    else
+        let tup_getopt_pos=++tup_getopt_pos
+        tup_getopt_name=$tup_getopt_pos
+        tup_getopt_value=$cur
+        tup_getopt_args=("${tup_getopt_args[@]:0}")
+        tup_debug 4 "tup_getopt: found positionl argument: $tup_getopt_value"
+        return 0
+    fi
+
+    tup_getopt_args=("${tup_getopt_args[@]:0}")
+
+    local matched=0
+    local optpsec=""
+
+    # have we already matched this argument?
+    for i in ${!tup_getopt_matched[@]}; do
+        if [[ "${tup_getopt_matched[$i]}" = "$tup_getopt_name" ]]; then
+            tup_debug 4 "tup_getopt: duplicate option: $tup_getopt_name"
+            return 3
+        fi
+    done
+
+    # is required?
+    for i in ${!tup_getopt_required[@]}; do
+        if [[ "${tup_getopt_required[$i]}" = "$tup_getopt_name" ]]; then
+            local matched=1
+            local optspec=${tup_getopt_required[$i]}
+            tup_getopt_matched=(${tup_getopt_matched[@]} $tup_getopt_name)
+            unset tup_getopt_required[$i]
+            tup_debug 4 "tup_getopt: required option: $tup_getopt_name"
+        fi
+    done
+
+    # is optional?
+    if [[ ! $matched = 1 ]]; then
+        for in in ${!tup_getopt_optional[@]}; do
+            if [[ "${tup_getopt_optional[$i]}" = "$tup_getopt_name" ]]; then
+                local matched=1
+                local optspec=${tup_getopt_optional[$i]}
+                tup_getopt_matched=(${tup_getopt_matched[@]} $tup_getopt_name)
+                unset tup_getopt_optional[$i]
+                tup_debug 4 "tup_getopt: optional option: $tup_getopt_name"
+            fi
+        done
+    fi
+
+    # requires an additional argument?
+    if [[ "${optspec:-1}" = ":" ]]; then
+        tup_debug 4 "tup_getopt: option requires value: $tup_getopt_name"
+        if [[ ${#tup_getopt_args[@]} = 0 ]]; then
+            tup_debug 4 "tup_getopt: unable to get option value: exhausted argument list"
+            return 2
+        fi
+        tup_getopt_value=${tup_getopt_args[0]}
+        tup_getopt_args=("${tup_getopt_args[@]:0}")
+    fi 
+
+    return 0
+}
+
 # produce a path from an object ID
 tup_path() {
     echo $(echo $1 | cut -b1-2)/$1
