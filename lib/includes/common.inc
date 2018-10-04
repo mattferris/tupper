@@ -129,8 +129,16 @@ tup_debug() {
     fi
 }
 
-# trap SIGERR
+# print error messages
 tup_error() {
+    local code=$1
+    shift
+    echo "error: $@" >&2
+    exit $code
+}
+
+# trap SIGERR
+tup_trap_error() {
     echo "error: caught error while running: $BASH_COMMAND" >&2
     exit 4
 }
@@ -179,10 +187,13 @@ tup_getopt_args=($@)
 tup_getopt_name=""
 tup_getopt_value=""
 tup_getopt_pos=0
+tup_getopt_return=0
 tup_getopt() {
 
     # bail if no remaining arguments
     if [[ ${#tup_getopt_args[@]} = 0 ]]; then
+        tup_debug 4 "tup_getopt: no more arguments"
+        tup_getopt_return=1
         return 1
     fi
 
@@ -195,12 +206,13 @@ tup_getopt() {
         let tup_getopt_pos=++tup_getopt_pos
         tup_getopt_name=$tup_getopt_pos
         tup_getopt_value=$cur
-        tup_getopt_args=("${tup_getopt_args[@]:0}")
-        tup_debug 4 "tup_getopt: found positionl argument: $tup_getopt_value"
+        tup_getopt_args=(${tup_getopt_args[@]:1})
+        tup_debug 4 "tup_getopt: found positional argument \$$tup_getopt_pos: $tup_getopt_value"
+        tup_getopt_return=0
         return 0
     fi
 
-    tup_getopt_args=("${tup_getopt_args[@]:0}")
+    tup_getopt_args=(${tup_getopt_args[@]:1})
 
     local matched=0
     local optpsec=""
@@ -209,13 +221,15 @@ tup_getopt() {
     for i in ${!tup_getopt_matched[@]}; do
         if [[ "${tup_getopt_matched[$i]}" = "$tup_getopt_name" ]]; then
             tup_debug 4 "tup_getopt: duplicate option: $tup_getopt_name"
+            tup_getopt_return=3
             return 3
         fi
     done
 
     # is required?
     for i in ${!tup_getopt_required[@]}; do
-        if [[ "${tup_getopt_required[$i]}" = "$tup_getopt_name" ]]; then
+        local name=${tup_getopt_required[$i]} 
+        if [[ $name = $tup_getopt_name || $name = "${tup_getopt_name}:" ]]; then
             local matched=1
             local optspec=${tup_getopt_required[$i]}
             tup_getopt_matched=(${tup_getopt_matched[@]} $tup_getopt_name)
@@ -226,8 +240,9 @@ tup_getopt() {
 
     # is optional?
     if [[ ! $matched = 1 ]]; then
-        for in in ${!tup_getopt_optional[@]}; do
-            if [[ "${tup_getopt_optional[$i]}" = "$tup_getopt_name" ]]; then
+        for i in ${!tup_getopt_optional[@]}; do
+            local name=${tup_getopt_optional[$i]}
+            if [[ $name = $tup_getopt_name || $name = "${tup_getopt_name}:" ]]; then
                 local matched=1
                 local optspec=${tup_getopt_optional[$i]}
                 tup_getopt_matched=(${tup_getopt_matched[@]} $tup_getopt_name)
@@ -237,17 +252,26 @@ tup_getopt() {
         done
     fi
 
+    # did we match an undefined option?
+    if [[ $matched = 0 ]]; then
+        tup_debug 4 "tup_getopt: option is undefined: $tup_getopt_name"
+        tup_getopt_return=4
+        return 4
+    fi
+
     # requires an additional argument?
-    if [[ "${optspec:-1}" = ":" ]]; then
+    if [[ "${optspec: -1}" = ":" ]]; then
         tup_debug 4 "tup_getopt: option requires value: $tup_getopt_name"
         if [[ ${#tup_getopt_args[@]} = 0 ]]; then
             tup_debug 4 "tup_getopt: unable to get option value: exhausted argument list"
+            tup_getopt_return=2
             return 2
         fi
         tup_getopt_value=${tup_getopt_args[0]}
-        tup_getopt_args=("${tup_getopt_args[@]:0}")
+        tup_getopt_args=(${tup_getopt_args[@]:1})
     fi 
 
+    tup_getopt_return=0
     return 0
 }
 
