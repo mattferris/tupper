@@ -51,6 +51,7 @@ EOF
 tup_getopt_required=(type:)
 tup_getopt_optional=(date detail format id-only labels long-id with-label:)
 
+# parse args
 while tup_getopt; do
     case $tup_getopt_name in
         date) opt_date=1;;
@@ -73,8 +74,6 @@ while tup_getopt; do
     esac
 done
 
-[ -z "$tup_getopt_return" ] && echo empty
-
 # handle option errors
 case $tup_getopt_return in
     0) ;;
@@ -85,6 +84,7 @@ case $tup_getopt_return in
     *) tup_error 4 "encountered unknown error while parsing arguments: code $tup_getopt_return" ;;
 esac
 
+# print usage
 if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
     _usage
 fi
