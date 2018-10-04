@@ -25,14 +25,14 @@ _cleanup() {
 trap _cleanup KILL EXIT
 trap tup_error ERR
 
-tup_parseargs "$@"
 
-path=$1
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
 
-if [[ -z "$path" ]]; then
-    cat <<EOF >&2
-
-usage: $TUP_FRONT_CMD $(basename $0) <path> [ --labels <label>,... ] [ --format <format> ] [ --squashfs-opts <opts> ] [ --tar-opts <opts> ]
+usage: $TUP_FRONT_CMD $(basename $0) <path> [ --help ] [ --labels <label>,... ] [ --format <format> ] [ --squashfs-opts <opts> ] [ --tar-opts <opts> ]
 
 Create a new layer, using <path> as it's filesystem.
 
@@ -40,6 +40,7 @@ Arguments:
 
     path      The path containing the layer's filesystem
     --format  The format for the filesystem: plain (default), squashfs, or tgz
+    --help    Print usage information
     --label   Labels to apply to the layer
 
     --squashfs-opts
@@ -50,7 +51,34 @@ Arguments:
 
 EOF
     exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=(1)
+tup_getopt_optional=(help labels: format: squasfs-opts: tar-opts:)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) path=$tup_getopt_value ;;
+        format) opt_format=$tup_getopt_value ;;
+        help) _usage ;;
+        labels) opt_labels=$tup_getopt_value ;;
+        squashfs-opts) opt_squashfs_opts=$tup_getopt_value ;;
+        tar-opts) opt_tar_opts=$tup_getopt_value ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
 fi
+
 
 #
 # check prerequisites

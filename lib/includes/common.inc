@@ -162,23 +162,6 @@ tup_object_exists() {
 # argument parsing
 #
 
-# parse argument list
-tup_parseargs() {
-    while [[ ! -z "$@" ]]; do
-        local arg=$1
-        if (echo $arg | grep -P '^--[a-z]+' 2>&1 >/dev/null); then
-            local name=$(echo $arg | cut -b3- | tr - _)
-            tup_debug 4 "tup_parseargs: found arg: $name"
-            eval "tuparg_${name}_set=1"
-        elif [[ ! -z "$name" ]]; then
-            tup_debug 4 "tup_parseargs: found arg value for $name: $arg" 
-            eval "tuparg_${name}='$arg'"
-            local name=""
-        fi
-        shift
-    done
-}
-
 # return next parsed argument
 tup_getopt_required=()
 tup_getopt_optional=()
@@ -203,13 +186,11 @@ tup_getopt() {
         tup_getopt_name=${cur#--}
         tup_debug 4 "tup_getopt: found option: $tup_getopt_name"
     else
+        local positional=1
         let tup_getopt_pos=++tup_getopt_pos
         tup_getopt_name=$tup_getopt_pos
         tup_getopt_value=$cur
-        tup_getopt_args=(${tup_getopt_args[@]:1})
         tup_debug 4 "tup_getopt: found positional argument \$$tup_getopt_pos: $tup_getopt_value"
-        tup_getopt_return=0
-        return 0
     fi
 
     tup_getopt_args=(${tup_getopt_args[@]:1})
@@ -254,9 +235,15 @@ tup_getopt() {
 
     # did we match an undefined option?
     if [[ $matched = 0 ]]; then
-        tup_debug 4 "tup_getopt: option is undefined: $tup_getopt_name"
-        tup_getopt_return=4
-        return 4
+        if [[ $positional = 1 ]]; then
+            tup_debug 4 "tup_getopt: unexpected positional argument: $tup_getopt_value"
+            tup_getopt_return=5
+            return 5
+        else
+            tup_debug 4 "tup_getopt: option is undefined: $tup_getopt_name"
+            tup_getopt_return=4
+            return 4
+        fi
     fi
 
     # requires an additional argument?
@@ -274,6 +261,20 @@ tup_getopt() {
     tup_getopt_return=0
     return 0
 }
+
+# handle tup_getopt errors
+tup_error_getopt() {
+    case $tup_getopt_return in
+        0) ;;
+        1) ;;
+        2) tup_error 1 "missing value for option: $tup_getopt_name" ;;
+        3) tup_error 1 "option already specified: $tup_getopt_name" ;;
+        4) tup_error 2 "invalid option specified: $tup_getopt_name" ;;
+        5) tup_error 2 "unexpected argument: $tup_getopt_value" ;;
+        *) tup_error 4 "encountered unknown error while parsing arguments: code $tup_getopt_return" ;;
+    esac
+}
+
 
 # produce a path from an object ID
 tup_path() {

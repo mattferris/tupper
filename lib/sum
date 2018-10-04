@@ -14,12 +14,16 @@ if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
     exit 1
 fi
 
-. "$(dirname $0)/includes/common.inc"
+. "$TUP_LIB_DIR/includes/common.inc"
 
 trap tup_error ERR
 
-if [[ "$1" = "--help" ]]; then
-    cat <<EOF >&2
+
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
 
 usage: $TUP_FRONT_CMD $(basename $0) [ <arg> ... ]
 
@@ -30,4 +34,26 @@ EOF
     exit 1
 fi
 
+tup_getopt_optional=(help)
+while tup_getopt; do
+    case $tup_getopt_name in
+        help) _usage ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
+fi
+
+
+#
+# main
+#
+
 tup_sum $@
+
+exit 0

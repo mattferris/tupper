@@ -25,13 +25,14 @@ _cleanup() {
 trap _cleanup KILL EXIT
 trap tup_error ERR
 
-name=$1
-image=$2
 
-if [[ -z "$image" ]]; then
-    cat <<EOF >&2
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <name> [ <ref> ]
+usage: $TUP_FRONT_CMD $(basename $0) <name> [ <ref> ] [ --help ]
 
 Create a new container named <name>, based of an image of the same name. If
 <ref> is specified, base the container on that image instead.
@@ -43,7 +44,31 @@ Arguments:
 
 EOF
     exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=(1)
+tup_getopt_optional=(2 help)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) name=$tup_getopt_value ;;
+        2) image=$tup_getopt_value ;;
+        help) _usage ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
 fi
+
 
 #
 # check prerequisites
@@ -70,8 +95,9 @@ if [[ -d "$TUP_STORAGE_DIR/containers/$containerid" ]]; then
     exit 2
 fi
 
+
 #
-# create the container directory and populate with defaults
+# main
 #
 
 if ! (mkdir -p "$tmpdir"); then
@@ -97,4 +123,5 @@ if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/containers/$pdir"); then
 fi
 
 echo "created container $name ($containerid)"
+
 exit 0

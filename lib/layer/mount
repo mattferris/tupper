@@ -18,22 +18,48 @@ fi
 
 trap tup_error ERR
 
-ref=$1
 
-if [[ -z "$ref" ]]; then
-    cat <<EOF >&2
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <ref>
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --help ]
 
 Mount a layer.
 
 Arguments:
 
-    ref  The ID of the layer to mount
+    ref     The ID of the layer to mount
+    --help  Print usage information
 
 EOF
     exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=(1)
+tup_getopt_optional=(help)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) ref=$tup_getopt_value ;;
+        help) _usage ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
 fi
+
 
 #
 # check prerequisites
@@ -44,8 +70,9 @@ if ! layerid=$(tup refparse "$ref" --type layer); then
     exit 2
 fi
 
+
 #
-# mount layer
+# main
 #
 
 if ! format=$(tup_conf get layer "$layerid" format); then
@@ -59,4 +86,5 @@ if ! (tup volume mount "$format" "$TUP_STORAGE_DIR/layers/$(tup_path "$layerid")
 fi
 
 echo "mounted layer $layerid"
+
 exit 0

@@ -18,37 +18,69 @@ fi
 
 trap tup_error ERR
 
-tup_parseargs $@
-ref=$1
 
-if [[ -z "$ref" || -z "$tuparg_type" ]]; then
-    cat <<EOF >&2
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --type <type> ]
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --help ] [ --type <type> ]
 
 Resolve a partial ID into a full ID.
 
 Arguments:
 
     ref     The name or ID of the object
+    --help  Print usage information
     --type  The object type: container, image, layer, or volume
 
 EOF
     exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=(1)
+tup_getopt_optional=(type:)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) ref=$tup_getopt_value ;;
+        help) _usage ;;
+        type)
+            case $tup_getopt_value in
+                container) ;;
+                image) ;;
+                layer) ;;
+                volume) ;;
+                *) tup_error 1 "invalid type specified: $tup_getopt_value" ;;
+            esac
+            opt_type=$tup_getopt_value
+            ;;
+    esac
+done
+
+# handle option errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
 fi
 
-case $tuparg_type in
 
+#
+# main
+#
+
+case $opt_type in
     container) searchdir="$TUP_STORAGE_DIR/containers";;
-        image) searchdir="$TUP_STORAGE_DIR/images";;
-        layer) searchdir="$TUP_STORAGE_DIR/layers";;
-       volume) searchdir="$TUP_STORAGE_DIR/volumes";;
-
-    *)
-        echo "error: invalid object type specified: $tuparg_type" >&2
-        exit 2
-        ;;
-
+    image) searchdir="$TUP_STORAGE_DIR/images";;
+    layer) searchdir="$TUP_STORAGE_DIR/layers";;
+    volume) searchdir="$TUP_STORAGE_DIR/volumes";;
 esac
 
 # use find to search for the ref
@@ -65,3 +97,5 @@ if [[ "$(echo "$results" | wc -l)" != "1" ]]; then
 fi
 
 echo $(basename $results)
+
+exit 0

@@ -18,39 +18,58 @@ fi
 
 trap tup_error ERR
 
-tup_parseargs "$@"
 
-if [[ -z "$tuparg_type" && ! "$(dirname $0)" = "$TUP_LIB_DIR" ]]; then
-    tuparg_type=$(basename $(dirname $0))
-fi
-
-ref=$1
-
-if [[ -z "$tuparg_type" ]]; then
+#
+# print usage
+#
+_usage() {
     cat <<EOF >&2
 
-usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --type <type> ]
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --help ] [ --type <type> ]
 
 Show object details.
 
 Arguments:
 
+    --help  Print usage information
     --type  The type of object to list: container, image, layer, or volume
 
 EOF
     exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=(1)
+tup_getopt_optional=(help type:)
+while tup_getopt; do
+    case
+        1) ref=$tup_getopt_value ;;
+        help) _usage ;;
+        type)
+            case $tup_getopt_value in
+                container) ;;
+                image) ;;
+                layer) ;;
+                volume) ;;
+                *) typ_error 1 "invalid type specified: $tup_getopt_value" ;;
+            esac
+            opt_type=$tup_getopt_value
+            ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
 fi
 
-case $tuparg_type in
-    container) ;;
-    image) ;;
-    layer) ;;
-    volume) ;;
-    *)
-        echo "error: invalid object type specified: $tuparg_type" >&2
-        exit 1
-        ;;
-esac
 
 #
 # prerequisites
@@ -62,6 +81,11 @@ if ! objid=$(tup refparse "$ref" --type $tuparg_type); then
     exit 2
 fi
 
-tup_conf show $tuparg_type $objid
+
+#
+# main
+#
+
+tup_conf show $opt_type $objid
 
 exit 0

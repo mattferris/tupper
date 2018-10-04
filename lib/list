@@ -18,10 +18,14 @@ fi
 
 trap tup_error ERR
 
+
+#
+# print usage
+#
 _usage() {
     cat <<EOF
 
-usage: tup layer list [ --with-label <label> ] [ --date ] [ --detail ] [ --format ] [ --id-only ] [ --labels ] [ --long-id ] [ --type <type> ]
+usage: tup layer list [ --with-label <label> ] [ --date ] [ --detail ] [ --format ] [ --help ] [ --id-only ] [ --labels ] [ --long-id ] [ --type <type> ]
 
 List objects. If --label is specified, list objects labelled with <label>.
 
@@ -29,6 +33,7 @@ Arguments:
 
     General options:
 
+        --help  Print usage information
         --type  The type of object to list: container, image, layer, or volume
 
     Filter options:
@@ -48,18 +53,22 @@ EOF
     exit 1
 }
 
-tup_getopt_required=(type:)
-tup_getopt_optional=(date detail format id-only labels long-id with-label:)
 
+#
 # parse args
+#
+
+tup_getopt_required=(type:)
+tup_getopt_optional=(date detail format help id-only labels long-id with-label:)
 while tup_getopt; do
     case $tup_getopt_name in
-        date) opt_date=1;;
-        detail) opt_date=1; opt_format=1; opt_labels=1;;
-        format) opt_format=1;;
-        id-only) opt_id_only=1;;
-        labels) opt_labels=1;;
-        long-id) opt_long_id=1;;
+        date) opt_date=1 ;;
+        detail) opt_date=1; opt_format=1; opt_labels=1 ;;
+        format) opt_format=1 ;;
+        help) _usage ;;
+        id-only) opt_id_only=1 ;;
+        labels) opt_labels=1 ;;
+        long-id) opt_long_id=1 ;;
         type)
             case $tup_getopt_value in
                 container) ;;
@@ -75,19 +84,17 @@ while tup_getopt; do
 done
 
 # handle option errors
-case $tup_getopt_return in
-    0) ;;
-    1) ;;
-    2) tup_error 1 "missing value for option: $tup_getopt_name" ;;
-    3) tup_error 1 "option already specified: $tup_getopt_name" ;;
-    4) tup_error 2 "invalid option specified: $tup_getopt_name" ;;
-    *) tup_error 4 "encountered unknown error while parsing arguments: code $tup_getopt_return" ;;
-esac
+tup_error_getopt
 
-# print usage
+# check for missing required options
 if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
     _usage
 fi
+
+
+#
+# main
+#
 
 objdir="$TUP_STORAGE_DIR/${opt_type}s"
 

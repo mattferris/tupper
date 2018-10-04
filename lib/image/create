@@ -14,7 +14,7 @@ if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
     exit 1
 fi
 
-. "$(dirname $0)/../includes/common.inc"
+. "$TUP_LIB_DIR/includes/common.inc"
 
 _cleanup() {
     tup_debug 1 "cleaning up"
@@ -25,14 +25,14 @@ _cleanup() {
 trap _cleanup KILL EXIT
 trap tup_error ERR
 
-tup_parseargs "$@"
 
-name=$1
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
 
-if [[ -z "$tuparg_layer" && -z "$tuparg_path" ]]; then
-    cat <<EOF >&2
-
-usage: $TUP_FRONT_CMD $(basename $0) <name> { --layer <ref> | --path <path> } [ --labels <label>,... ]
+usage: $TUP_FRONT_CMD $(basename $0) <name> { --layer <ref> | --path <path> } [ --help ] [ --labels <label>,... ]
 
 Create a new image named <name>, using either layer <ref> or the contents of
 <path> as it's filesystem.
@@ -40,46 +40,69 @@ Create a new image named <name>, using either layer <ref> or the contents of
 Arguments:
 
     name      The name the image
+    --help    Print usage information
     --labels  Labels to apply to the image
     --layer   The layer ref to use as the image's filesystem
     --path    The path containing the image's filesystem
 
 EOF
     exit 1
+}
+
+tup_getopt_required=(1)
+tup_getopt_optional=(layer: path: labels:)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) name=$tup_getopt_value ;;
+        help) _usage ;;
+        labels) opt_labels=$tup_getopt_value ;;
+        layer) opt_layer=$tup_getopt_layer ;;
+        path) opt_path=$tup_getopt_path ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
 fi
 
-if [[ ! -z "$tuparg_layer" && ! -z "$tuparg_path" ]]; then
+if [[ ! -z "$opt_layer" && ! -z "$opt_path" ]]; then
     echo "error: either '--layer' or '--path' can be specified, not both" >&2
     exit 1
 fi
+
 
 #
 # check prerequisites
 #
 
-if [[ ! -z "$tuparg_path" && ! -d "$tuparg_path" ]]; then
-    echo "error: path doesn't exist: $tuparg_path" >&2
+if [[ ! -z "$opt_path" && ! -d "$opt_path" ]]; then
+    echo "error: path doesn't exist: $opt_path" >&2
     exit 2
 fi
 
-if [[ ! -z "$tuparg_layer" ]] && ! layerid=$(tup refparse "$tuparg_layer"; then
+if [[ ! -z "$opt_layer" ]] && ! layerid=$(tup refparse "$opt_layer"); then
     echo "error: layer doesn't exist: $ref" >&2
     exit 2
 fi
 
+
 #
-# create the container directory and populate with defaults
+# main
 #
 
 if [[ -z "$layerid" ]]; then
     # create the new layer
-    if ! layerid=$(tup layer init "$tuparg_path"); then
+    if ! layerid=$(tup layer create "$opt_path" --format squashfs); then
         echo "error: failed to initialize image: $name" >&2
         exit 4
     fi
 else
-    if ! layerid=$(tup refparse layer "$tuparg_layer"); then
-        echo "error: layer doesn't exist; $tuparg_layer" >&2
+    if ! layerid=$(tup refparse layer "$opt_layer"); then
+        echo "error: layer doesn't exist; $opt_layer" >&2
         exit 2
     fi
     tup_debug 1 "using existing layer $layerid"
@@ -98,8 +121,8 @@ touch "$tmpdir/conf"
 tup_conf set path "$tmpdir/conf" name $name
 tup_conf set path "$tmpdir/conf" volumes $layerid
 
-if [[ ! -z "$tuparg_labels" ]]; then
-    tup_conf set path "$tmpdir/conf" labels $(echo $tuparg_labels | tr , \ )
+if [[ ! -z "$opt_labels" ]]; then
+    tup_conf set path "$tmpdir/conf" labels $(echo $opt_labels | tr , \ )
 fi
 
 imageid=$(tup_sum_dir "$tmpdir")
@@ -115,7 +138,8 @@ if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/containers/$pdir/$imageid"); then
     echo "error: failed to create image dir $TUP_STORAGE_DIR/images/$path" >&2
     exit 3
 fi
-tup_debug 1 "moved $tmpdir to "$TUP_STORAGE_DIR/images/$path"
+tup_debug 1 "moved $tmpdir to $TUP_STORAGE_DIR/images/$path"
 
 echo "created image $name ($imageid)"
+
 exit 0
