@@ -1,0 +1,195 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+_cleanup() {
+    tup_debug 1 "cleaning up"
+    if [[ ! -z "$tmpdir" && -d "$tmpdir" ]]; then
+        rm -r "$tmpdir" 2>&1 >/dev/null
+    fi
+}
+trap _cleanup KILL EXIT
+trap tup_error ERR
+
+
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
+
+usage: $TUP_FRONT_CMD $(basename $0) <source> [ --layer | --plain | --squashfs | --tgz ] [ --labels <label>,... ] [ --help ]
+
+Mount a volume.
+
+Arguments:
+
+    source      The source of the volume
+
+    --help      Print usage information
+    --labels    Labels for the volume
+    --layer     <source> refers to a layer ID (default)
+    --plain     <source> refers to a directory path
+    --squashfs  <source> refers to a squashfs filesystem
+    --tgz       <source> refers to a gzipped tarball file
+
+EOF
+    exit 1
+}
+
+
+#
+# parse args
+#
+
+format="layer"
+
+tup_getopt_required=(1)
+tup_getopt_optional=(help labels: layer plain squashfs tgz)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) source=$tup_getopt_value ;;
+        help) _usage ;;
+        labels) opt_labels=$tup_getopt_value ;;
+        layer) format="layer" ;;
+        plain) format="plain" ;;
+        squashfs) format="squashfs" ;;
+        tgz) format="tgz" ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required args
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
+fi
+
+
+#
+# check prerequisites
+#
+
+if [[ ! $format = "layer" && ! -d "$source" && ! -f "$source" ]]; then
+    echo "error: source doesn't exist: $source" >&2
+    exit 2
+fi
+
+if [[ $format = "layer" ]]; then 
+    if ! layerid=$(tup refparse --layer "$source"); then
+        echo "error: layer doesn't exist: $source" >&2
+        exit 2
+    fi
+
+    format=$(tup_conf get layer $layerid format)
+    source="$TUP_STORAGE_DIR/layers/$(tup_path $layerid)/fs"
+fi
+
+volumeid=$(tup_sum_str "$source")
+vdir="$TUP_STORAGE_DIR/volumes/$(tup_path "$volumeid")"
+
+if [[ -d "$vdir" ]]; then
+    echo "error: volume is already mounted: $source" >&2
+    exit 2
+fi
+
+#
+# mount filesystem of specified format
+#
+
+tmpdir="$TUP_STORAGE_DIR/staging/$(tup_path $volumeid)"
+if ! (mkdir -p "$tmpdir"); then
+    echo "error: failed to create staging directory: $tmpdir" >&2
+    exit 4
+fi
+
+target="$tmpdir/mount"
+case $format in
+
+    plain)
+        if ! (cp -rp "$source" "$target"); then
+            echo "error: failed to copy source: $source" >&2
+            exit 3
+        fi
+        tup_debug 1 "copied $source to $target"
+        ;;
+
+    squashfs)
+        if ! (mkdir "$target"); then
+            echo "error: failed to create volume directory: $target" >&2
+            exit 3
+        fi
+        if ! (mount -t squashfs "$source" "$target" 2>&1 >/dev/null); then
+            echo "error: failed to mount squashfs: $source in $target" >&2
+            exit 3
+        fi
+        tup_debug 1 "mounted squashfs $source in $target"
+        ;;
+
+    tgz)
+        if ! (mkdir "$target"); then
+            echo "error: failed to create volume directory: $target" >&2
+            exit 3
+        fi
+        if ! (tar -C "$target" -xzf "$source" 2>&1 >/dev/null); then
+            echo "error: failed to extract tarball from source: $source" >&2
+            exit 3
+        fi
+        tup_debug 1 "extracted tarball $source to $target"
+        ;;
+
+    *)
+        echo "error: invalid format specified: $format" >&2
+        exit 1
+        ;;
+
+esac
+
+conffile="$tmpdir/conf"
+touch "$conffile"
+tup_conf set path "$conffile" source "$source"
+tup_conf set path "$conffile" format "$format"
+tup_conf set path "$conffile" date $(date --iso-8601=seconds)
+
+if [[ ! -z "$opt_labels" ]]; then
+    labels=$(echo -n "$opt_labels" | tr , \ )
+    tup_conf set path "$conffile" labels "$labels"
+fi
+
+if [[ ! -z "$layerid" ]]; then
+    tup_conf set path "$conffile" layer "$layerid"
+fi
+
+if ! (mkdir -p "$(dirname "$vdir")"); then
+    echo "error: failed to create volume directory: $vdir" >&2
+    exit 4
+fi
+tup_debug 1 "created volume directory $vdir"
+
+if ! (mv "$tmpdir" "$(dirname "$vdir")"); then
+    echo "error: failed to move staging directory: $tmpdir" >&2
+    exit 4
+fi
+
+if [[ -t 1 ]]; then
+    echo -n "created volume "
+fi
+
+echo $volumeid
+
+exit 0

@@ -25,15 +25,17 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --help ]
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --date ] [ --help ] [ --long-id ]
 
-Mount a layer.
+Display the lineage of a layer.
 
 Arguments:
 
-    ref     The ID of the layer to mount
+    ref        The layer to display the lineage of
 
-    --help  Print usage information
+    --date     Display the date the layer was created
+    --help     Print usage information
+    --long-id  Print the full layer ID
 
 EOF
     exit 1
@@ -45,18 +47,20 @@ EOF
 #
 
 tup_getopt_required=(1)
-tup_getopt_optional=(help)
+tup_getopt_optional=(date help long-id)
 while tup_getopt; do
     case $tup_getopt_name in
         1) ref=$tup_getopt_value ;;
+        date) opt_date=1 ;;
         help) _usage ;;
+        long-id) opt_long_id=1 ;;
     esac
 done
 
 # handle getopt errors
 tup_error_getopt
 
-# check for missing required args
+# check for missing required options
 if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
     _usage
 fi
@@ -76,15 +80,20 @@ fi
 # main
 #
 
-if ! (tup volume create --layer $layerid); then
-    echo "error: failed to mount layer: $layerid" >&2
-    exit 4
-fi
+while [[ ! -z "$layerid" ]]; do
+    if [[ $opt_long_id = 1 ]]; then
+        echo -n $layerid
+    else
+        echo -n ${layerid:0:12}
+    fi
 
-if [[ -t 1 ]]; then
-    echo -n "mounted layer "
-fi
+    if [[ $opt_date = 1 ]]; then
+        echo -n "  $(tup_conf get layer $layerid date)"
+    fi
 
-echo $layerid
+    echo
+
+    layerid=$(tup_conf get layer $layerid parent)
+done
 
 exit 0

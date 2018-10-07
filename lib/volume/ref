@@ -7,4 +7,4 @@
 # github.com/mattferris/tupper/blob/master/License.txt
 #
 
-exec "$TUP_LIB_DIR/refparse" $@ --type volume
+exec "$TUP_LIB_DIR/refparse" --volume $@

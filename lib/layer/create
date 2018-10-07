@@ -32,16 +32,20 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <path> [ --help ] [ --labels <label>,... ] [ --format <format> ] [ --squashfs-opts <opts> ] [ --tar-opts <opts> ]
+usage: $TUP_FRONT_CMD $(basename $0) <path> [ --help ] [ --labels <label>,... ] [ --parent <ref> ] [ --plain | --squashfs | --tgz ] [ --squashfs-opts <opts> ] [ --tar-opts <opts> ]
 
 Create a new layer, using <path> as it's filesystem.
 
 Arguments:
 
     path      The path containing the layer's filesystem
-    --format  The format for the filesystem: plain (default), squashfs, or tgz
-    --help    Print usage information
-    --label   Labels to apply to the layer
+
+    --help      Print usage information
+    --labels    Labels to apply to the layer
+    --parent    Set <ref> as the parent of the layer
+    --plain     Save the layer's filesystem as a plain directory
+    --squashfs  Save the layer's filesystem as a squashfs volume (default)
+    --tgz       Save the layer's filesystem as a gzipped tarball
 
     --squashfs-opts
               Options to pass to squashfs
@@ -58,16 +62,21 @@ EOF
 # parse args
 #
 
+format="squashfs"
+
 tup_getopt_required=(1)
-tup_getopt_optional=(help labels: format: squasfs-opts: tar-opts:)
+tup_getopt_optional=(help labels: parent: plain squashfs squashfs-opts: tar-opts: tgz)
 while tup_getopt; do
     case $tup_getopt_name in
         1) path=$tup_getopt_value ;;
-        format) opt_format=$tup_getopt_value ;;
         help) _usage ;;
         labels) opt_labels=$tup_getopt_value ;;
+        parent) opt_parent=$tup_getopt_value ;;
+        plain) format="plain" ;;
+        squashfs) format="squashfs" ;;
         squashfs-opts) opt_squashfs_opts=$tup_getopt_value ;;
         tar-opts) opt_tar_opts=$tup_getopt_value ;;
+        tgz) format="tgz" ;;
     esac
 done
 
@@ -89,6 +98,10 @@ if [[ ! -d "$path" ]]; then
     exit 2
 fi
 
+if [[ ! -z "$opt_parent" ]] && ! parentid=$(tup refparse --layer "$opt_parent"); then
+    echo "error: parent layer doesn't exist: $opt_parent" >&2
+    exit 2
+fi
 
 #
 # create the layer directory
@@ -103,14 +116,10 @@ if ! (mkdir -p "$tmpdir"); then
 fi
 tup_debug 1 "created temporary layer directory $tmpdir"
 
+
 #
 # import filesystem into specified format
 #
-
-format="squashfs"
-if [[ ! -z "$tuparg_format" ]]; then
-    format=$tuparg_format
-fi
 
 touch "$tmpdir/conf"
 
@@ -127,8 +136,8 @@ case $format in
         ;;
 
     squashfs)
-        tup_debug 2 "mksquashfs $path $tmpdir/fs -no-progress $tuparg_squashfs_opts"
-        if ! (mksquashfs "$path" "$tmpdir/fs" -no-progress $tuparg_squashfs_opts 2>&1 >/dev/null); then
+        tup_debug 2 "mksquashfs $path $tmpdir/fs -no-progress $opt_squashfs_opts"
+        if ! (mksquashfs "$path" "$tmpdir/fs" -no-progress $opt_squashfs_opts 2>&1 >/dev/null); then
             echo "error: failed to create squashfs from path: $path" >&2
             exit 3
         fi
@@ -138,8 +147,8 @@ case $format in
         ;;
 
     tgz)
-        tup_debug 2 "tar czf $tmpdir/fs --acls --xattr $tuparg_tar_opts $path"
-        if ! (tar czf "$tmpdir/fs" --acls --xattr $tuparg_tar_opts "$path" 2>&1 >/dev/null); then
+        tup_debug 2 "tar czf $tmpdir/fs --acls --xattrs $opt_tar_opts $path"
+        if ! (tar czf "$tmpdir/fs" --acls --xattrs $opt_tar_opts "$path" 2>&1 >/dev/null); then
             echo "error: failed to create tarball from path: $path" >&2
             exit 3
         fi
@@ -158,8 +167,12 @@ esac
 tup_conf set path "$tmpdir/conf" checksum $fssum
 tup_conf set path "$tmpdir/conf" date $(date --iso-8601=seconds)
 
-if [[ ! -z "$tuparg_labels" ]]; then
-    tup_conf set path "$tmpdir/conf" labels $(echo $tuparg_labels | tr , \ )
+if [[ ! -z "$opt_labels" ]]; then
+    tup_conf set path "$tmpdir/conf" labels $(echo $opt_labels | tr , \ )
+fi
+
+if [[ ! -z "$parentid" ]]; then
+    tup_conf set path "$tmpdir/conf" parent $parentid
 fi
 
 layerid=$(tup_sum_dir "$tmpdir")
@@ -179,5 +192,10 @@ if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/layers/$pdir/$layerid"); then
 fi
 tup_debug 1 "moved $tmpdir to $TUP_STORAGE_DIR/layers/$path"
 
-echo "created layer $layerid"
+if [[ -t 1 ]]; then
+    echo -n "created layer "
+fi
+
+echo $layerid
+
 exit 0

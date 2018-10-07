@@ -18,24 +18,55 @@ fi
 
 trap tup_error ERR
 
-ref=$1
 
-if [[ -z "$ref" ]]; then
-    cat <<EOF >&2
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <ref>
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --help ]
 
-Unmount a volume.
+Destroy a volume.
 
 Arguments:
 
-    ref  The volume to unmount
+    ref     The volume to destory
+
+    --help  Print usage information
 
 EOF
     exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=(1)
+tup_getopt_optional=(help)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) ref=$tup_getopt_value ;;
+        help) _usage ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required args
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
 fi
 
-if ! volumeid=$(tup refparse "$ref"); then
+
+#
+# main
+#
+
+if ! volumeid=$(tup refparse --volume "$ref"); then
     echo "error: volume doesn't exist: $volumeid" >&2
     exit 2
 fi
@@ -64,10 +95,15 @@ case $format in
 
 esac
 
-if ! (rm -r "$path"); then
+if ! (rm -r "$(dirname "$path")"); then
     echo "error: failed to remove volume directory: $path" >&2
     exit 3
 fi
 
-echo "unmounted volume $volumeid"
+if [[ -t 1 ]]; then
+    echo -n "destroyed volume "
+fi
+
+echo $volumeid
+
 exit 0

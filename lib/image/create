@@ -40,6 +40,7 @@ Create a new image named <name>, using either layer <ref> or the contents of
 Arguments:
 
     name      The name the image
+
     --help    Print usage information
     --labels  Labels to apply to the image
     --layer   The layer ref to use as the image's filesystem
@@ -50,14 +51,14 @@ EOF
 }
 
 tup_getopt_required=(1)
-tup_getopt_optional=(layer: path: labels:)
+tup_getopt_optional=(help labels: layer: path:)
 while tup_getopt; do
     case $tup_getopt_name in
         1) name=$tup_getopt_value ;;
         help) _usage ;;
         labels) opt_labels=$tup_getopt_value ;;
-        layer) opt_layer=$tup_getopt_layer ;;
-        path) opt_path=$tup_getopt_path ;;
+        layer) opt_layer=$tup_getopt_value ;;
+        path) opt_path=$tup_getopt_value ;;
     esac
 done
 
@@ -84,8 +85,8 @@ if [[ ! -z "$opt_path" && ! -d "$opt_path" ]]; then
     exit 2
 fi
 
-if [[ ! -z "$opt_layer" ]] && ! layerid=$(tup refparse "$opt_layer"); then
-    echo "error: layer doesn't exist: $ref" >&2
+if [[ ! -z "$opt_layer" ]] && ! layerid=$(tup refparse --layer "$opt_layer"); then
+    echo "error: layer doesn't exist: $opt_layer" >&2
     exit 2
 fi
 
@@ -95,17 +96,18 @@ fi
 #
 
 if [[ -z "$layerid" ]]; then
+    tup_debug 1 "creating new layer from path: $opt_path"
     # create the new layer
-    if ! layerid=$(tup layer create "$opt_path" --format squashfs); then
+    if ! layerid=$(tup layer create "$opt_path" --format squashfs | cut -d\  -f3); then
         echo "error: failed to initialize image: $name" >&2
         exit 4
     fi
 else
-    if ! layerid=$(tup refparse layer "$opt_layer"); then
+    tup_debug 1 "using existing layer $layerid"
+    if ! layerid=$(tup refparse --layer "$opt_layer"); then
         echo "error: layer doesn't exist; $opt_layer" >&2
         exit 2
     fi
-    tup_debug 1 "using existing layer $layerid"
 fi
 
 tmpid=$(tup_sum_str $name $(date))
@@ -119,6 +121,7 @@ tup_debug 1 "created temporary image directory $tmpdir"
 
 touch "$tmpdir/conf"
 tup_conf set path "$tmpdir/conf" name $name
+tup_conf set path "$tmpdir/conf" date $(date --iso-8601=seconds)
 tup_conf set path "$tmpdir/conf" volumes $layerid
 
 if [[ ! -z "$opt_labels" ]]; then
@@ -134,12 +137,16 @@ if ! (mkdir -p "$TUP_STORAGE_DIR/images/$pdir"); then
     exit 3
 fi
 
-if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/containers/$pdir/$imageid"); then
+if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/images/$pdir/$imageid"); then
     echo "error: failed to create image dir $TUP_STORAGE_DIR/images/$path" >&2
     exit 3
 fi
 tup_debug 1 "moved $tmpdir to $TUP_STORAGE_DIR/images/$path"
 
-echo "created image $name ($imageid)"
+if [[ -t 1 ]]; then
+    echo -n "created image $name "
+fi
+
+echo $imageid
 
 exit 0

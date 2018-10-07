@@ -25,10 +25,14 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) [ <arg> ... ]
+usage: $TUP_FRONT_CMD $(basename $0) [ <arg> ... ] [ --help ]
 
 Generate a checksum from the supplied arguments. If no arguments are specified
 then generate a checksum of the contents of the current directory.
+
+Arguments:
+
+    --help  Print usage information
 
 EOF
     exit 1

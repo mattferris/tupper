@@ -1,0 +1,116 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+trap tup_error ERR
+
+
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
+
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --help ] [ --lineage ] [ --long-id ]
+
+Verify a layer's checksum.
+
+Arguments:
+
+    ref        The layer to verify
+
+    --help     Print usage information
+    --lineage  Verify the specified layer as well as it's ancestors
+    --long-id  Print the full layer ID
+
+EOF
+    exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=(1)
+tup_getopt_optional=(help lineage long-id)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) ref=$tup_getopt_value ;;
+        help) _usage ;;
+        lineage) opt_lineage=1 ;;
+        long-id) opt_long_id=1 ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
+fi
+
+
+#
+# check prerequisites
+#
+
+if ! layerid=$(tup refparse --layer "$ref"); then
+    echo "error: layer doesn't exist: $ref" >&2
+    exit 2
+fi
+
+
+#
+# main
+#
+
+while [[ ! -z "$layerid" ]]; do
+    if [[ $opt_long_id = 1 ]]; then
+        echo -n $layerid
+    else
+        echo -n ${layerid:0:12}
+    fi
+
+    fs="$TUP_STORAGE_DIR/layers/$(tup_path $layerid)/fs"
+    case $(tup_conf get layer $layerid format) in
+
+        plain) sum=$(tup_sum_dir "$fs") ;;
+        squashfs) sum=$(tup_sum_file "$fs") ;;
+        tgz) sum=$(tup_sum_file "$fs") ;;
+        *) echo "error: invalid format for layer: $layerid" >&2; exit 2
+
+    esac
+
+    layersum=$(tup_conf get layer $layerid checksum)
+    if [[ $sum = $layersum ]]; then
+        echo -n " ok"
+    else
+        echo -n " failed (expected $layersum, got $sum)"
+    fi
+
+    echo
+
+    if [[ $opt_lineage = 1 ]]; then
+        layerid=$(tup_conf get layer $layerid parent)
+    else
+        layerid=""
+    fi
+done
+
+exit 0

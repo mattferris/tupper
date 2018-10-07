@@ -25,18 +25,13 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --container | --image | --layer | --volume ] [ --help ]
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --help ]
 
-Show object details.
+Destroy a layer.
 
 Arguments:
 
-    ref     The object ID to show
-
-    --container  <ref> refers to a container ID
-    --image      <ref> refers to an image ID
-    --layer      <ref> refers to a layer ID
-    --volume     <ref> refers to a volume ID
+    ref     The layer to destory
 
     --help  Print usage information
 
@@ -49,38 +44,21 @@ EOF
 # parse args
 #
 
-opt_type="container"
-
 tup_getopt_required=(1)
-tup_getopt_optional=(container image layer volume help)
+tup_getopt_optional=(help)
 while tup_getopt; do
     case $tup_getopt_name in
         1) ref=$tup_getopt_value ;;
-        container) opt_type="container" ;;
         help) _usage ;;
-        image) opt_type="container" ;;
-        layer) opt_type="layer" ;;
-        volume) opt_type="volume" ;;
     esac
 done
 
 # handle getopt errors
 tup_error_getopt
 
-# check for missing required options
+# check for missing required args
 if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
     _usage
-fi
-
-
-#
-# prerequisites
-#
-
-# resolve object ID
-if ! objid=$(tup refparse --$opt_type "$ref"); then
-    echo "error: $opt_type doesn't exist: $ref" >&2
-    exit 2
 fi
 
 
@@ -88,6 +66,20 @@ fi
 # main
 #
 
-tup_conf show $opt_type $objid
+if ! layerid=$(tup refparse --layer "$ref"); then
+    echo "error: layerid doesn't exist: $ref" >&2
+    exit 2
+fi
+
+if ! (rm -r "$TUP_STORAGE_DIR/layers/$(tup_path $layerid)"); then
+    echo "error: failed to destroy layer: $layerid" >&2
+    exit 3
+fi
+
+if [[ -t 1 ]]; then
+    echo -n "destroyed layer "
+fi
+
+echo $layerid
 
 exit 0

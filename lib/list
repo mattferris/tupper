@@ -25,16 +25,17 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: tup layer list [ --with-label <label> ] [ --date ] [ --detail ] [ --format ] [ --help ] [ --id-only ] [ --labels ] [ --long-id ] [ --type <type> ]
+usage: tup layer list type [ --with-label <label> ] [ --date ] [ --detail ] [ --format ] [ --help ] [ --id-only ] [ --labels ] [ --long-id ] [ --name ]
 
 List objects. If --label is specified, list objects labelled with <label>.
 
 Arguments:
 
+    type  The type of object to list: container, image, layer, or volume
+
     General options:
 
         --help  Print usage information
-        --type  The type of object to list: container, image, layer, or volume
 
     Filter options:
 
@@ -42,12 +43,12 @@ Arguments:
 
     Display options:
 
-        --date       Show creation date and time
-        --detail     Implies --date and --labels
-        --format     Show layer format
-        --id-only    Only dislay object IDs (implies --long)
-        --labels     Show object labels
-        --long-id    Show full object IDs instead of partials ones
+        --date     Show creation date and time
+        --format   Show the object format (valid for layers, volumes)
+        --id-only  Only dislay object IDs (implies --long)
+        --labels   Show object labels (valid for containers, images, layers)
+        --long-id  Show full object IDs instead of partials ones
+        --name     Show the name of the object (valid for containers, images)
 
 EOF
     exit 1
@@ -58,18 +59,11 @@ EOF
 # parse args
 #
 
-tup_getopt_required=(type:)
-tup_getopt_optional=(date detail format help id-only labels long-id with-label:)
+tup_getopt_required=(1)
+tup_getopt_optional=(date format help id-only labels long-id name with-label:)
 while tup_getopt; do
     case $tup_getopt_name in
-        date) opt_date=1 ;;
-        detail) opt_date=1; opt_format=1; opt_labels=1 ;;
-        format) opt_format=1 ;;
-        help) _usage ;;
-        id-only) opt_id_only=1 ;;
-        labels) opt_labels=1 ;;
-        long-id) opt_long_id=1 ;;
-        type)
+        1)
             case $tup_getopt_value in
                 container) ;;
                 image) ;;
@@ -79,6 +73,11 @@ while tup_getopt; do
             esac
             opt_type=$tup_getopt_value
             ;;
+        date) opt_date=1 ;;
+        help) _usage ;;
+        id-only) opt_id_only=1 ;;
+        labels) opt_labels=1 ;;
+        long-id) opt_long_id=1 ;;
         with-label) opt_with_label=$tup_getopt_value ;;
     esac
 done
@@ -103,6 +102,19 @@ if ! objects=$(find "$objdir" -mindepth 2 -maxdepth 2 -exec basename '{}' \;); t
 fi
 
 for i in $objects; do
+    if [[ ! -z "$opt_with_label" ]]; then
+       labels=$(tup_conf get $opt_type $i labels) 
+       matched=0
+       for label in $labels; do
+           if [[ $opt_with_label = $label ]]; then
+               matched=1
+           fi
+       done
+       if [[ $matched = 0 ]]; then
+           continue
+       fi
+    fi
+
     if [[ ! -z "$opt_long_id" ]]; then
         echo -n $i
     else
@@ -114,15 +126,11 @@ for i in $objects; do
     fi
 
     if [[ ! -z "$opt_date" ]]; then
-        echo -n "  $(tup_conf get layer $i date)"
-    fi
-
-    if [[ ! -z "$opt_format" ]]; then
-        echo -n "  $(tup_conf get layer $i format)"
+        echo -n "  $(tup_conf get $opt_type $i date)"
     fi
 
     if [[ ! -z "$opt_labels" ]]; then
-        echo -n "  ($(tup_conf get layer $i labels))"
+        echo -n "  ($(tup_conf get $opt_type $i labels))"
     fi
 
     echo

@@ -25,15 +25,20 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --help ] [ --type <type> ]
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --container | --image | --layer | --volume ] [ --help ]
 
 Resolve a partial ID into a full ID.
 
 Arguments:
 
-    ref     The name or ID of the object
+    ref          The name or ID of the object
+
+    --container  <ref> refers to a container ID (default)
+    --image      <ref> refers to an image ID
+    --layer      <ref> refers to a layer ID
+    --volume     <ref> refers to a volume ID
+
     --help  Print usage information
-    --type  The object type: container, image, layer, or volume
 
 EOF
     exit 1
@@ -44,22 +49,18 @@ EOF
 # parse args
 #
 
+opt_type="container"
+
 tup_getopt_required=(1)
-tup_getopt_optional=(type:)
+tup_getopt_optional=(container image layer volume help)
 while tup_getopt; do
     case $tup_getopt_name in
         1) ref=$tup_getopt_value ;;
+        container) opt_type="container" ;;
+        image) opt_type="image" ;;
         help) _usage ;;
-        type)
-            case $tup_getopt_value in
-                container) ;;
-                image) ;;
-                layer) ;;
-                volume) ;;
-                *) tup_error 1 "invalid type specified: $tup_getopt_value" ;;
-            esac
-            opt_type=$tup_getopt_value
-            ;;
+        layer) opt_type="layer" ;;
+        volume) opt_type="volume" ;;
     esac
 done
 

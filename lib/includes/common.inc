@@ -52,7 +52,7 @@ tup_conf_get() {
     local cfg=$1
     local key=$2
     if ! (grep "^$key " "$cfg" | cut -d\  -f2-); then
-        tup_debug 3 "debug: key $key not found in $cfg"
+        tup_debug 3 "key $key not found in $cfg"
     fi
 }
 
@@ -77,7 +77,7 @@ tup_conf_search() {
     local cfg=$1
     local key=$2
     if ! (grep "^$key\." "$cfg"); then
-        tup_debug 3 "debug: key $key not found in $cfg"
+        tup_debug 3 "key $key not found in $cfg"
     fi
 }
 
@@ -87,7 +87,7 @@ tup_conf_set() {
     local key=$2
     shift; shift
     if ! (cat "$cfg" | grep -v "^$key " > "$cfg.tmp"); then
-        tup_debug 3 "debug: key $key not set in $cfg"
+        tup_debug 3 "key $key not set in $cfg"
     fi
     echo "$key $@" >> "$cfg.tmp"
     mv "$cfg.tmp" "$cfg"
@@ -111,7 +111,7 @@ tup_conf_unset() {
     local cfg=$1
     local key=$2
     if ! (cat "$cfg" | grep -v "^$key " > "$cfg.tmp"); then
-        tup_debug 3 "debug: key $key not found in $cfg"
+        tup_debug 3 "key $key not found in $cfg"
     fi
     mv "$cfg.tmp" "$cfg"
 }
@@ -170,6 +170,7 @@ tup_getopt_args=($@)
 tup_getopt_name=""
 tup_getopt_value=""
 tup_getopt_pos=0
+tup_getopt_posargs=()
 tup_getopt_return=0
 tup_getopt() {
 
@@ -184,7 +185,7 @@ tup_getopt() {
     local cur=${tup_getopt_args[0]}
     if [[ "${cur:0:2}" = "--" ]]; then
         tup_getopt_name=${cur#--}
-        tup_debug 4 "tup_getopt: found option: $tup_getopt_name"
+        tup_debug 4 "tup_getopt: found option: $cur"
     else
         local positional=1
         let tup_getopt_pos=++tup_getopt_pos
@@ -229,6 +230,10 @@ tup_getopt() {
                 tup_getopt_matched=(${tup_getopt_matched[@]} $tup_getopt_name)
                 unset tup_getopt_optional[$i]
                 tup_debug 4 "tup_getopt: optional option: $tup_getopt_name"
+            elif [[ $positional = 1 && $name = "@" ]]; then
+                local matched=1
+                tup_getopt_matched=(${tup_getopt_matched[@]} $tup_getopt_name)
+                tup_debug 4 "tup_getopt: wildcard positional argument: $tup_getopt_name"
             fi
         done
     fi
@@ -258,6 +263,11 @@ tup_getopt() {
         tup_getopt_args=(${tup_getopt_args[@]:1})
     fi 
 
+    if [[ $positional = 1 ]]; then
+        tup_getopt_posargs=(${tup_getopt_posargs[@]} $tup_getopt_value)
+        tup_debug 4 "tup_getopt: saving positional argument $tup_getopt_name: $tup_getopt_value"
+    fi
+
     tup_getopt_return=0
     return 0
 }
@@ -267,9 +277,9 @@ tup_error_getopt() {
     case $tup_getopt_return in
         0) ;;
         1) ;;
-        2) tup_error 1 "missing value for option: $tup_getopt_name" ;;
-        3) tup_error 1 "option already specified: $tup_getopt_name" ;;
-        4) tup_error 2 "invalid option specified: $tup_getopt_name" ;;
+        2) tup_error 1 "missing value for option: --$tup_getopt_name" ;;
+        3) tup_error 1 "option already specified: --$tup_getopt_name" ;;
+        4) tup_error 2 "invalid option specified: --$tup_getopt_name" ;;
         5) tup_error 2 "unexpected argument: $tup_getopt_value" ;;
         *) tup_error 4 "encountered unknown error while parsing arguments: code $tup_getopt_return" ;;
     esac

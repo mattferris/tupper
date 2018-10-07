@@ -7,4 +7,4 @@
 # github.com/mattferris/tupper/blob/master/License.txt
 #
 
-exec "$TUP_LIB_DIR/list" $@ --type container
+exec "$TUP_LIB_DIR/list" container $@

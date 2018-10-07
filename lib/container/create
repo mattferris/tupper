@@ -39,8 +39,10 @@ Create a new container named <name>, based of an image of the same name. If
 
 Arguments:
 
-    name  The name the container
-    ref   The name or ID of the image to base the container on
+    name    The name the container
+    ref     The name or ID of the image to base the container on
+
+    --help  Print usage information
 
 EOF
     exit 1
@@ -122,6 +124,10 @@ if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/containers/$pdir"); then
     exit 3
 fi
 
-echo "created container $name ($containerid)"
+if [[ -t 1 ]]; then
+    echo -n "created container $name "
+fi
+
+echo $containerid
 
 exit 0

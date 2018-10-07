@@ -1,0 +1,127 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+trap tup_error ERR
+
+
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
+
+usage: $TUP_FRONT_CMD $(basename $0) { <ref1> <ref2> [ ... ] | <ref1>..<ref2> } [ --help ]
+
+Create a new layer from two or more existing layers. Providing multiple layers separated by a space will merge unlreated layers. Two layers separated by '..' will merge all layers in a lineage from the latest (<ref1>) to the earliest (<ref2>).
+
+Arguments:
+
+    ref1|ref2  The ID of the layer to merge
+
+    --help     Print usage information
+
+EOF
+    exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=(1)
+tup_getopt_optional=(@ help)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) ref=$tup_getopt_value ;;
+        help) _usage ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required args
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
+fi
+
+
+#
+# check prerequisites
+#
+
+layers=()
+if [[ $ref = *".."* ]]; then
+
+    refs=(${ref/../ })
+
+    tup_debug 1 "merging related layers from ${refs[0]} to ancestor ${refs[1]}"
+
+    tup_debug 3 "tup refparse --layer ${refs[0]}"
+    if ! current_layerid=$(tup refparse --layer "${refs[0]}"); then
+        tup_error 2 "layer doesn't exist: ${refs[0]}"
+    fi
+
+    tup_debug 3 "tup refparse --layer ${refs[0]}"
+    if ! ancestor_layerid=$(tup refparse --layer "${refs[1]}"); then
+        tup_error 2 "ancestor layer doesn't exist: ${refs[1]}"
+    fi
+
+    tup_debug 3 "tup layer lineage $current_layerid --long-id"
+    if ! lineage=$(tup layer lineage $current_layerid --long-id); then
+        tup_error 4 "failed to get lineage of layer: $current_layerid"
+    fi
+
+    matched=0
+    for lid in $lineage; do
+        layers=(${layers[@]} $lid)
+        if [[ $lid = $ancestor_layerid ]]; then
+            matched=1
+            break
+        fi
+    done
+
+    if [[ $matched = 0 ]]; then
+        tup_error 2 "${refs[1]} is not an ancestor of ${refs[0]}"
+    fi
+
+else
+
+    tup_debug 1 "merging unlreated layers ${tup_getopt_posargs[@]}"
+
+    for ref in ${tup_getopt_posargs[@]}; do
+
+        if ! layerid=$(tup refparse --layer "$ref"); then
+            tup_error 2 "layer doesn't exist: $ref"
+        fi
+
+        layers=(${layers[@]} $layerid)
+
+    done
+
+fi
+
+
+#
+# main
+#
+
+echo "layers: ${layers[@]}"
+
+exit 0

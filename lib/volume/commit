@@ -1,0 +1,132 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+_cleanup() {
+    tup_debug 1 "cleaning up"
+    if [[ ! -z "$tmpdir" && -d "$tmpdir" ]]; then
+        rm -r "$tmpdir" 2>&1 >/dev/null
+    fi
+}
+trap _cleanup KILL EXIT
+trap tup_error ERR
+
+
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
+
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --plain | --squashfs | --tgz ] [ --labels <label>,... | --extra-labels >label>,... ] [ --help ]
+
+Mount a volume.
+
+Arguments:
+
+    source          The source of the volume
+
+    --help          Print usage information
+    --extra-labels  Additional labels for the layer
+    --labels        Override labels assigned to the volume
+    --plain         Commit volume in plain format
+    --squashfs      Commit volume in squashfs format
+    --tgz           Commit volume in tgz format
+
+EOF
+    exit 1
+}
+
+
+#
+# parse args
+#
+
+format="squashfs"
+
+tup_getopt_required=(1)
+tup_getopt_optional=(help extra-labels: labels: plain squashfs tgz)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) ref=$tup_getopt_value ;;
+        extra-labels) opt_extra_labels=$tup_getopt_value ;;
+        labels) opt_labels=$tup_getopt_value ;;
+        help) _usage ;;
+        plain) format="plain" ;;
+        squashfs) format="squashfs" ;;
+        tgz) format="tgz" ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required args
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
+fi
+
+
+#
+# check prerequisites
+#
+
+if ! volumeid=$(tup refparse --volume "$ref"); then
+    echo "error: volume doesn't exist: $ref" >&2
+    exit 2
+fi
+
+if [[ ! -z "$opt_extra_labels" && ! -z "$opt_labels" ]]; then
+    echo "error: only one of --extra-labels and --labels must be specified" >&2
+    exit 2
+fi
+
+
+#
+# main
+#
+
+labels=$(tup_conf get volume $volumeid labels)
+if [[ ! -z "$opt_extra_labels" ]]; then
+    opt_extra_labels=$(echo -n "$opt_extra_labels" | tr , \ )
+    labels="$labels $opt_extra_labels"
+elif [[ ! -z "$opt_labels" ]]; then
+    labels=$opt_labels
+fi
+
+if [[ ! -z "$labels" ]]; then
+    labels="--labels $(echo -n "$labels" | tr \  ,)"
+fi
+
+parent=$(tup_conf get volume $volumeid layer)
+if [[ ! -z "$parent" ]]; then
+    parent="--parent $parent"
+fi
+
+vdir="$TUP_STORAGE_DIR/volumes/$(tup_path $volumeid)"
+if ! (tup layer create "$vdir/mount" --$format $labels $parent); then
+    echo "error: failed to commit volume: $volumeid" >&2
+    exit 4
+fi
+
+if [[ -t 1 ]]; then
+    echo -n "committed volume "
+fi
+
+echo $volumeid
+
+exit 0
