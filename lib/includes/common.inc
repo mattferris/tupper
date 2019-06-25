@@ -116,6 +116,23 @@ tup_conf_unset() {
     mv "$cfg.tmp" "$cfg"
 }
 
+# load user conf
+tup_conf_userload() {
+    local user=$1
+    local userconf="~/$user/.tupper/conf"
+    local userconf=$(eval echo ${userconf//>})
+    if [[ -f "$userconf" ]]; then
+        TUP_USER_NAME=$(tup_conf get path "$userconf" name)
+        TUP_USER_EMAIL=$(tup_conf get path "$userconf" email)
+    fi
+    if [[ -z $TUP_USER_NAME ]]; then
+        TUP_USER_NAME=$(whoami)
+    fi
+    if [[ -z $TUP_USER_EMAIL ]]; then
+        TUP_USER_EMAIL="$TUP_USER_NAME@$(hostname -f 2>/dev/null || hostname -s)"
+    fi
+}
+
 
 #
 # debugging and error reporting
@@ -141,6 +158,14 @@ tup_error() {
 tup_trap_error() {
     echo "error: caught error while running: $BASH_COMMAND" >&2
     exit 4
+}
+
+# print warning messages
+tup_warn() {
+    local code=$1
+    shift
+    echo "warning: $@" >&2
+    exit $code
 }
 
 
@@ -183,7 +208,11 @@ tup_getopt() {
 
     # determine next argument
     local cur=${tup_getopt_args[0]}
-    if [[ "${cur:0:2}" = "--" ]]; then
+    if [[ $cur = "--" ]]; then
+        tup_debug 4 "tup_getopt: found --, end of arguments"
+        tup_getopt_return=1
+        return 1
+    elif [[ ${cur:0:2} = "--" ]]; then
         tup_getopt_name=${cur#--}
         tup_debug 4 "tup_getopt: found option: $cur"
     else
@@ -309,4 +338,46 @@ tup_sum_file() {
 # generate a checksum for a string
 tup_sum_str() {
     echo -n "$@" | sha256sum | cut -d\  -f1
+}
+
+
+#
+# object listings
+#
+
+tup_list_objs() {
+    local dir="$TUP_STORAGE_DIR/$1"
+    if [[ ! -d "$dir" ]]; then
+        tup_error 4 "tup_list_objs: invalid object dir: $dir"
+    fi
+    find "$dir" -mindepth 2 -maxdepth 2 -exec basename '{}' \;
+    return $?
+}
+
+tup_list_containers() {
+    tup_list_objs containers
+    return $?
+}
+
+tup_list_images() {
+    tup_list_objs images
+    return $?
+}
+
+tup_list_layers() {
+    tup_list_objs layers
+    return $?
+}
+
+tup_list_volumes() {
+    tup_list_objs volumes
+}
+
+
+#
+# common formats
+#
+
+tup_date() {
+    date --date="$1" +"%b %e %Y %R"
 }

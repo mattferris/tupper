@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -a
+
+PATH="bin/:$PATH"
+#TUP_DEBUG=3
+TUP_LIB_PATH="/root/lib"
+TUP_STORAGE_PATH="/root/tmp"
+
+exec $@

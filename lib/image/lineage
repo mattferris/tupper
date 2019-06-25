@@ -1,0 +1,99 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+trap tup_error ERR
+
+
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
+
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --date ] [ --help ] [ --long-id ]
+
+Display the lineage of an image.
+
+Arguments:
+
+    ref        The image to display the lineage of
+
+    --date     Display the date the image was created
+    --help     Print usage information
+    --long-id  Print the full image ID
+
+EOF
+    exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=(1)
+tup_getopt_optional=(date help long-id)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) ref=$tup_getopt_value ;;
+        date) opt_date=1 ;;
+        help) _usage ;;
+        long-id) opt_long_id=1 ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
+fi
+
+
+#
+# check prerequisites
+#
+
+if ! imageid=$(tup refparse --image "$ref"); then
+    echo "error: image doesn't exist: $ref" >&2
+    exit 2
+fi
+
+
+#
+# main
+#
+
+while [[ ! -z "$imageid" ]]; do
+    if [[ $opt_long_id = 1 ]]; then
+        echo -n $imageid
+    else
+        echo -n ${imageid:0:12}
+    fi
+
+    if [[ $opt_date = 1 ]]; then
+        echo -n "  $(tup_conf get image $imageid date)"
+    fi
+
+    echo
+
+    imageid=$(tup_conf get image $imageid parent)
+done
+
+exit 0

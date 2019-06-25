@@ -122,6 +122,24 @@ fi
 # main
 #
 
-echo "layers: ${layers[@]}"
+for l in ${layers[@]}; do
+    if ! (tup layer mount $l); then
+        tup_error 3 "failed to mount layer: $l"
+    fi
+done
+
+if ! volumeid=$(echo ${layers[@]} | tup volume unify --stdin --read-only); then
+    tup_error 3 "failed to create union mount"
+fi
+
+if ! layerid=$(tup volume commit $volumeid); then
+    tup_error 3 "failed to commit volume: $volumeid"
+fi
+
+if [[ -t 1 ]]; then
+    echo -n "merged layers as "
+fi
+
+echo $layerid
 
 exit 0

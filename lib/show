@@ -58,7 +58,7 @@ while tup_getopt; do
         1) ref=$tup_getopt_value ;;
         container) opt_type="container" ;;
         help) _usage ;;
-        image) opt_type="container" ;;
+        image) opt_type="image" ;;
         layer) opt_type="layer" ;;
         volume) opt_type="volume" ;;
     esac

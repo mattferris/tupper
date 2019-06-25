@@ -32,20 +32,22 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <source> [ --layer | --plain | --squashfs | --tgz ] [ --labels <label>,... ] [ --help ]
+usage: $TUP_FRONT_CMD $(basename $0) [ <source> ] [ --empty | --filesystem | --plain | --squashfs | --tgz ] [ --labels <label>,... ] [ --layer <ref> ] [ --help ]
 
-Mount a volume.
+Mount a volume. If --empty is specified, create an empty volume.
 
 Arguments:
 
     source      The source of the volume
 
-    --help      Print usage information
-    --labels    Labels for the volume
-    --layer     <source> refers to a layer ID (default)
-    --plain     <source> refers to a directory path
-    --squashfs  <source> refers to a squashfs filesystem
-    --tgz       <source> refers to a gzipped tarball file
+    --help        Print usage information
+    --empty       Create an empty volume
+    --labels      Labels for the volume
+    --layer       The layer the volume belongs to
+    --filesystem  <source> refers to a filesystem ID (default)
+    --plain       <source> refers to a directory path
+    --squashfs    <source> refers to a squashfs filesystem
+    --tgz         <source> refers to a gzipped tarball file
 
 EOF
     exit 1
@@ -56,16 +58,18 @@ EOF
 # parse args
 #
 
-format="layer"
+format="squashfs"
 
-tup_getopt_required=(1)
-tup_getopt_optional=(help labels: layer plain squashfs tgz)
+tup_getopt_required=()
+tup_getopt_optional=(1 empty help layer: labels: filesystem plain squashfs tgz)
 while tup_getopt; do
     case $tup_getopt_name in
         1) source=$tup_getopt_value ;;
+        empty) format="empty" ;;
         help) _usage ;;
         labels) opt_labels=$tup_getopt_value ;;
-        layer) format="layer" ;;
+        layer) opt_layer=$tup_getopt_value ;;
+        filesystem) opt_filesystem="filesystem" ;;
         plain) format="plain" ;;
         squashfs) format="squashfs" ;;
         tgz) format="tgz" ;;
@@ -85,27 +89,36 @@ fi
 # check prerequisites
 #
 
-if [[ ! $format = "layer" && ! -d "$source" && ! -f "$source" ]]; then
-    echo "error: source doesn't exist: $source" >&2
-    exit 2
+if [[ -z "$opt_filesystem"  && ! $format = "empty" && ! -d "$source" && ! -f "$source" ]]; then
+    tup_error 2 "source doesn't exist: $source"
 fi
 
-if [[ $format = "layer" ]]; then 
-    if ! layerid=$(tup refparse --layer "$source"); then
-        echo "error: layer doesn't exist: $source" >&2
-        exit 2
+if [[ ! -z $opt_filesystem ]]; then 
+    if ! filesystemid=$(tup refparse --filesystem "$source"); then
+        tup_error 2 "filesystem doesn't exist: $source"
     fi
-
-    format=$(tup_conf get layer $layerid format)
-    source="$TUP_STORAGE_DIR/layers/$(tup_path $layerid)/fs"
+    source="$TUP_STORAGE_DIR/filesystems/$(tup_path $filesystemid)"
 fi
 
 volumeid=$(tup_sum_str "$source")
+
+if  [[ $format = "empty" ]]; then
+    # generate random ID
+    volumeid=$(dd status=none if=/dev/urandom bs=32 count=1 | hexdump -ve '/1 "%02x"')
+fi
+
+if [[ ! -z "$opt_layer" ]] && ! layerid=$(tup refparse --layer "$opt_layer"); then
+    tup_error 2 "layer doesn't exist: $opt_layer"
+fi
+
 vdir="$TUP_STORAGE_DIR/volumes/$(tup_path "$volumeid")"
 
 if [[ -d "$vdir" ]]; then
-    echo "error: volume is already mounted: $source" >&2
-    exit 2
+    if [[ -t 1 ]]; then
+        echo -n "existing volume "
+    fi
+    echo $volumeid
+    tup_warn 100 "volume is already mounted: $volumeid"
 fi
 
 #
@@ -114,48 +127,47 @@ fi
 
 tmpdir="$TUP_STORAGE_DIR/staging/$(tup_path $volumeid)"
 if ! (mkdir -p "$tmpdir"); then
-    echo "error: failed to create staging directory: $tmpdir" >&2
-    exit 4
+    tup_error 4 "failed to create staging directory: $tmpdir"
 fi
 
 target="$tmpdir/mount"
 case $format in
 
+    empty)
+        if ! (mkdir -p "$target"); then
+            tup_error 3 "failed to create empty mount"
+        fi
+        ;;
+
     plain)
         if ! (cp -rp "$source" "$target"); then
-            echo "error: failed to copy source: $source" >&2
-            exit 3
+            tup_error 3 "failed to copy source: $source"
         fi
         tup_debug 1 "copied $source to $target"
         ;;
 
     squashfs)
         if ! (mkdir "$target"); then
-            echo "error: failed to create volume directory: $target" >&2
-            exit 3
+            tup_error 3 "failed to create volume directory: $target"
         fi
         if ! (mount -t squashfs "$source" "$target" 2>&1 >/dev/null); then
-            echo "error: failed to mount squashfs: $source in $target" >&2
-            exit 3
+            tup_error 3 "failed to mount squashfs: $source in $target"
         fi
         tup_debug 1 "mounted squashfs $source in $target"
         ;;
 
     tgz)
         if ! (mkdir "$target"); then
-            echo "error: failed to create volume directory: $target" >&2
-            exit 3
+            tup_error 3 "failed to create volume directory: $target"
         fi
         if ! (tar -C "$target" -xzf "$source" 2>&1 >/dev/null); then
-            echo "error: failed to extract tarball from source: $source" >&2
-            exit 3
+            tup_error 3 "failed to extract tarball from source: $source"
         fi
         tup_debug 1 "extracted tarball $source to $target"
         ;;
 
     *)
-        echo "error: invalid format specified: $format" >&2
-        exit 1
+        tup_error 1 "invalid format specified: $format"
         ;;
 
 esac
@@ -176,14 +188,12 @@ if [[ ! -z "$layerid" ]]; then
 fi
 
 if ! (mkdir -p "$(dirname "$vdir")"); then
-    echo "error: failed to create volume directory: $vdir" >&2
-    exit 4
+    tup_error 4 "failed to create volume directory: $vdir"
 fi
 tup_debug 1 "created volume directory $vdir"
 
 if ! (mv "$tmpdir" "$(dirname "$vdir")"); then
-    echo "error: failed to move staging directory: $tmpdir" >&2
-    exit 4
+    tup_error 4 "failed to move staging directory: $tmpdir"
 fi
 
 if [[ -t 1 ]]; then

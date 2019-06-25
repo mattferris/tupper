@@ -1,0 +1,145 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+_cleanup() {
+    if [[ ! -z $volumeid ]]; then
+        tup volume destroy $volumeid
+    fi
+    if [[ ! -z $upperid ]]; then
+        tup volume destroy $upperid
+    fi
+}
+trap _cleanup EXIT KILL
+
+
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
+
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --systemd-nspawn ] [ --help ]
+
+Start the container <ref>. Optionally, override the container's default
+mechanism by specifying --systemd-nspawn.
+
+Arguments:
+
+    ref     The ID of the container to start
+
+    --help  Print usage information
+
+    --systemd-nspawn
+            Change the container mechanism to systemd-nspawn
+
+EOF
+    exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=(1)
+tup_getopt_optional=(help systemd-nspawn)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) ref=$tup_getopt_value ;;
+        help) _usage ;;
+        image) image=$tup_getopt_value ;;
+        systemd-nspawn) opt_mechanism=$tup_getopt_name ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
+fi
+
+
+#
+# check prerequisites
+#
+
+# does the referenced container exist?
+if ! containerid=$(tup refparse --container "$ref"); then
+    tup_error 2 "container doesn't exist: $ref"
+fi
+
+# are there bindings for the specified mechanism?
+if [[ ! -z $opt_mechanism ]]; then
+    mechanism=$opt_mechanism
+else
+    mechanism=$(tup_conf get container $containerid mechanism)
+fi
+
+binding=""
+for path in ${TUP_BINDINGS_PATH/:/ }; do
+    tup_debug 2 "searching for mechanism bindings in $path"
+    if [[ -f "$path/$mechanism" ]]; then
+        binding="$path/$mechanism"
+    fi
+done
+
+if [[ -z "$binding" ]]; then
+    tup_error 3 "unable to locate bindings for specified mechanism: $mechanism"
+fi
+
+. "$binding"
+
+
+#
+# main
+#
+
+# prepare root filesystem
+for i in $(tup_conf get container $containerid layers); do
+    layer=(${i/:/ })
+    if [[ ${layer[1]} = "/" ]]; then
+        if ! lowerids=$(tup layer mount ${layer[0]} --lineage); then
+            tup_error 4 "failed to mount read-only filesystem for container: $containerid"
+        fi
+        if ! upperid=$(tup volume create --empty); then
+            tup_error 4 "failed to create read-write filesystem for container: $containerid"
+        fi
+        if ! volumeid=$(echo -e "$lowerids\n$upperid" | tup volume unify --stdin --read-write); then
+            tup_error 4 "failed to create overlay for container: $containerid"
+        fi
+        tup_conf set container $containerid volume $upperid
+    fi
+done
+
+export TUP_MECHANISM_ID=$containerid
+export TUP_MECHANISM_ROOT="$TUP_STORAGE_DIR/volumes/$(tup_path $volumeid)/mount"
+export TUP_MECHANISM_BOOT=$(tup_conf get container $containerid boot)
+export TUP_MECHANISM_NAME=$(tup_conf get container $containerid name)
+if ! (tup_mechanism_start); then
+    tup_error 4 "failed to start container: $containerid"
+fi
+
+if [[ -t 1 ]]; then
+    echo -n "start container "
+fi
+
+echo $containerid
+
+exit 0

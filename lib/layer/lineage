@@ -25,7 +25,7 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --date ] [ --help ] [ --long-id ]
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --date ] [ --help ] [ --long-id ] [ --reverse ]
 
 Display the lineage of a layer.
 
@@ -36,6 +36,7 @@ Arguments:
     --date     Display the date the layer was created
     --help     Print usage information
     --long-id  Print the full layer ID
+    --reverse  Print the lineage in reverse order (oldest to youngest)
 
 EOF
     exit 1
@@ -47,13 +48,14 @@ EOF
 #
 
 tup_getopt_required=(1)
-tup_getopt_optional=(date help long-id)
+tup_getopt_optional=(date help long-id reverse)
 while tup_getopt; do
     case $tup_getopt_name in
         1) ref=$tup_getopt_value ;;
         date) opt_date=1 ;;
         help) _usage ;;
         long-id) opt_long_id=1 ;;
+        reverse) opt_reverse=1 ;;
     esac
 done
 
@@ -80,20 +82,34 @@ fi
 # main
 #
 
+layers=()
 while [[ ! -z "$layerid" ]]; do
+    layers=(${layers[@]} $layerid)
+    layerid=$(tup_conf get layer $layerid parent)
+done
+
+print_layer_id() {
     if [[ $opt_long_id = 1 ]]; then
         echo -n $layerid
     else
         echo -n ${layerid:0:12}
     fi
-
     if [[ $opt_date = 1 ]]; then
         echo -n "  $(tup_conf get layer $layerid date)"
     fi
-
     echo
+}
 
-    layerid=$(tup_conf get layer $layerid parent)
-done
+if [[ $opt_reverse ]]; then
+    while [[ ${#layers[@]} -gt 0 ]]; do
+        layerid=${layers[${#layers[@]}-1]}
+        print_layer_id $layerid
+        unset layers[${#layers[@]}-1]
+    done
+else
+    for layerid in ${layers[@]}; do
+        print_layer_id $layerid
+    done
+fi
 
 exit 0

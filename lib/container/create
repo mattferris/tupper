@@ -32,17 +32,20 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <name> [ <ref> ] [ --help ]
+usage: $TUP_FRONT_CMD $(basename $0) <name> [ --image <ref> ] [ --systemd-nspawn ] [ --help ]
 
 Create a new container named <name>, based of an image of the same name. If
 <ref> is specified, base the container on that image instead.
 
 Arguments:
 
-    name    The name the container
-    ref     The name or ID of the image to base the container on
+    name     The name the container
 
-    --help  Print usage information
+    --help   Print usage information
+    --image  The name or ID of the image to base the container on
+
+    --systemd-nspawn
+             Set the container mechanism to systemd-nspawn (default)
 
 EOF
     exit 1
@@ -53,13 +56,16 @@ EOF
 # parse args
 #
 
+mechanism="systemd-nspawn"
+
 tup_getopt_required=(1)
-tup_getopt_optional=(2 help)
+tup_getopt_optional=(image: help systemd-nspawn)
 while tup_getopt; do
     case $tup_getopt_name in
         1) name=$tup_getopt_value ;;
-        2) image=$tup_getopt_value ;;
         help) _usage ;;
+        image) image=$tup_getopt_value ;;
+        systemd-nspawn) mechanism=$tup_getopt_name ;;
     esac
 done
 
@@ -82,46 +88,57 @@ if [[ -z "$image" ]]; then
 fi
 
 # does the referenced image exist?
-imageref=$(tup image ref "$image")
-if [[ ! $? ]]; then
-    echo "error: image doesn't exist: $image" >&2
-    exit 2
+if ! imageid=$(tup refparse --image "$image"); then
+    tup_error 2 "image doesn't exist: $image"
 fi
 
-containerid=$(tup_sum_str "$name $imageref")
+containerid=$(tup_sum_str "$name $imageid")
 tmpdir="$TUP_STORAGE_DIR/staging/$containerid"
 
 # does a container with this name already exist?
 if [[ -d "$TUP_STORAGE_DIR/containers/$containerid" ]]; then
-    echo "error: container already exists: $name" >&2
-    exit 2
+    tup_error 2 "container already exists: $name"
 fi
-
 
 #
 # main
 #
 
 if ! (mkdir -p "$tmpdir"); then
-    echo "error: failed to create container directory: $tmpdir" >&2
-    exit 3
+    tup_error 3 "failed to create container directory: $tmpdir"
 fi
 
 touch "$tmpdir/conf"
 tup_conf set path "$tmpdir/conf" name $name
-tup_conf set path "$tmpdir/conf" parent $imageref
+tup_conf set path "$tmpdir/conf" date $(date --iso-8601=seconds)
+tup_conf set path "$tmpdir/conf" image $imageid
+tup_conf set path "$tmpdir/conf" layers "$(tup_conf get image $imageid layers)"
+tup_conf set path "$tmpdir/conf" mechanism "$mechanism"
+
+labels=$(tup_conf get image $imageid labels)
+if [[ ! -z "$labels" ]]; then
+    tup_conf set path "$tmpdir/conf" labels "$labels"
+fi
+
+boot=$(tup_conf get image $imageid boot)
+if [[ ! -z "$boot" ]]; then
+    tup_conf set path "$tmpdir/conf" boot $boot
+fi
+
+entrypoint=$(tup_conf get image $imageid entrypoint)
+if [[ ! -z "$entrypoint" ]]; then
+    tup_conf set path "$tmpdir/conf" entrypoint "$entrypoint"
+fi
 
 path=$(tup_path $containerid)
 pdir=$(dirname $path);
 
 if ! (mkdir -p "$TUP_STORAGE_DIR/containers/$pdir"); then
-    echo "error: failed to create container parent directory: $TUP_STORAGE_DIR/containers/$pdir" >&2
-    exit 3
+    tup_error 3 "failed to create container parent directory: $TUP_STORAGE_DIR/containers/$pdir"
 fi
 
 if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/containers/$pdir"); then
-    echo "error: failed to create container dir $TUP_STORAGE_DIR/containers/$path" >&2
-    exit 3
+    tup_error 3 "failed to create container dir $TUP_STORAGE_DIR/containers/$path"
 fi
 
 if [[ -t 1 ]]; then

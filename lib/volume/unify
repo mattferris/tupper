@@ -1,0 +1,180 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+_cleanup() {
+    tup_debug 1 "cleaning up"
+    if [[ ! -z "$voldir" && -d "$voldir" ]]; then
+        rm -r "$voldir" 2>&1 >/dev/null
+    fi
+}
+trap _cleanup KILL EXIT
+trap tup_error ERR
+
+
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
+
+usage: $TUP_FRONT_CMD $(basename $0) { --stdin | <ref> <ref> ... } [ --read-only | --read-write ] [ --help ]
+
+Create a union mount from multiple volumes. If --stdin specified, read volume ID's from stdin instead of the argument list.
+
+Arguments:
+
+    ref           Volume ID to include in the union mount
+
+    --help        Print usage information
+    --read-only   Last volume is a read-only layer (default)
+    --read-write  Last volume is a read/write layer
+    --stdin       Read volume IDs from stdin instead
+
+EOF
+    exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=()
+tup_getopt_optional=(@ help read-only read-write stdin)
+while tup_getopt; do
+    case $tup_getopt_name in
+        help) _usage ;;
+        read-only) opt_read_only=1 ;;
+        read-write) opt_read_write=1 ;;
+        stdin) opt_stdin=1 ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required args
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
+fi
+
+
+#
+# check prerequisites
+#
+
+if [[ -z $opt_stdin && ${#tup_getopt_posargs[@]} = 0 ]]; then
+    tup_error 2 "no volumes specified"
+fi
+
+
+#
+# main
+#
+
+volumes=()
+volids=()
+
+if [[ $opt_stdin = 1 ]]; then
+    tup_debug 1 "reading volumes from stdin"
+    while read id; do
+        if ! volid=$(tup refparse --volume "$id"); then
+            tup_error 2 "volume doesn't exist: $id"
+        fi
+        tup_debug 3 "using volume $volid"
+        volumes=("${volumes[@]}" "$TUP_STORAGE_DIR/volumes/$(tup_path $volid)/mount")
+        volids=(${volids[@]} $volid)
+    done
+else
+    tup_debug 1 "reading volumes from command line"
+    i=0
+    while [[ ! -z ${tup_getopt_posargs[$i]} ]]; do
+        id=${tup_getopt_posargs[$i]}
+        if ! volid=$(tup refparse --volume "$id"); then
+            tup_error 2 "volume doesn't exist: $id"
+        fi
+        tup_debug 3 "using volume $volid"
+        volumes=("${volumes[@]}" "$TUP_STORAGE_DIR/volumes/$(tup_path $volid)/mount")
+        volids=(${volids[@]} $volid)
+        let i=i+1
+    done
+fi
+
+volumeid=$(tup_sum_str "${volumes[@]}")
+voldir="$TUP_STORAGE_DIR/volumes/$(tup_path $volumeid)"
+
+tup_debug 2 "using volume ID $volumeid"
+
+if [[ -d "$voldir" ]]; then
+    voldir=""
+    tup_error 2 "volume already exists: $volumeid"
+fi
+
+if ! (mkdir -p "$voldir/.overlayfs"); then
+    tup_error 4 "failed to create volume directory: $voldir"
+fi
+
+if ! (mkdir "$voldir/mount"); then
+    tup_error 4 "failed to create mount point: $voldir/mount"
+fi
+
+lowerdir=""
+upperdir=""
+workdir="$voldir/.overlayfs"
+
+i=0
+len=${#volumes[@]}
+while [[ $i -lt $len ]]; do
+    let next=i+1
+    if [[ $next = $len && $opt_read_write = 1 ]]; then
+        tup_debug 2 "upperdir ${volumes[$i]}"
+        upperdir=${volumes[$i]}
+    else
+        tup_debug 2 "lowerdir ${volumes[$i]}"
+        if [[ ! -z $lowerdir ]]; then
+            lowerdir="$lowerdir:"
+        fi
+        lowerdir="${lowerdir}${volumes[$i]}"
+    fi
+    let i=i+1
+done
+
+opts="lowerdir=$lowerdir"
+
+if [[ ! -z $upperdir ]]; then
+    opts="$opts,upperdir=$upperdir,workdir=$workdir"
+fi
+
+if ! (mount -t overlay overlay -o $opts "$voldir/mount" 2>&1 >/dev/null); then
+    tup_error 3 "failed to mount overlayfs: $opts"
+fi
+
+touch "$voldir/conf"
+tup_conf set volume $volumeid source "${volumes[@]}"
+tup_conf set volume $volumeid format overlayfs
+tup_conf set volume $volumeid date $(date --iso-8601=seconds)
+
+voldir=""
+
+if [[ -t 1 ]]; then
+    echo -n "unified as "
+fi
+
+echo $volumeid
+
+exit 0

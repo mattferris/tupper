@@ -26,6 +26,7 @@ EOF
 exit 1
 fi
 
+
 #
 # Discover path to subcommands
 #
@@ -45,6 +46,15 @@ for path in $TUP_LIB_PATH; do
         export TUP_LIB_DIR=$path
     fi
 done
+
+
+#
+# Discover bindings paths
+#
+
+if [[ -z "$TUP_BINDINGS_PATH" ]]; then
+    export TUP_BINDINGS_PATH="/etc/tupper/bindings:$TUP_LIB_DIR/bindings"
+fi
 
 
 #
@@ -83,6 +93,7 @@ done
 # Exec the subcommand or error
 #
 
+IFS=$IFSBAK
 if [[ -d "$TUP_LIB_DIR/$cmd" && "$cmd" != "includes" ]]; then
     TUP_FRONT_CMD="$TUP_FRONT_CMD $cmd"
     cmd="$cmd/$1"
@@ -90,7 +101,6 @@ if [[ -d "$TUP_LIB_DIR/$cmd" && "$cmd" != "includes" ]]; then
 fi
 
 if [[ -x "$TUP_LIB_DIR/$cmd" && "$cmd" != "includes" ]]; then
-    IFS=$IFSBAK
     exec "$TUP_LIB_DIR/$cmd" $@
 else
     echo "error: unknown command: $cmd" >&2

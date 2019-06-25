@@ -67,37 +67,48 @@ fi
 #
 
 if ! volumeid=$(tup refparse --volume "$ref"); then
-    echo "error: volume doesn't exist: $volumeid" >&2
-    exit 2
+    tup_error 2 "volume doesn't exist: $volumeid"
 fi
 
 format=$(tup_conf get volume $volumeid format)
 path="$TUP_STORAGE_DIR/volumes/$(tup_path "$volumeid")/mount"
 case $format in
 
+    empty)
+        ;;
+ 
+    overlayfs)
+        msg=$(umount "$path" 2>&1 >/dev/null) || \
+        case $? in
+            0) ;;
+            32) tup_debug 2 "overlayfs volume not mounted: $volumeid" ;;
+            *) tup_error 3 "failed to unmount overlayfs: ($code) $path" ;;
+        esac
+        ;;
+
     plain)
         ;;
 
     squashfs)
-        if ! (umount "$path"); then
-            echo "error: failed to unmount squashfs: $path" >&2
-            exit 3
-        fi
+        msg=$(umount "$path" 2>&1 >/dev/null) || \
+        case $? in
+            0) ;;
+            32) tup_debug 2 "squashfs volume not mounted: $volumeid" ;;
+            *) tup_error 3 "failed to unmount squashfs: ($code) $path" ;;
+        esac
         ;;
 
     tgz)
         ;;
 
     *)
-        echo "error: unknown format specified: $format" >&2
-        exit 2
+        tup_error 2 "unknown format specified: $format"
         ;;
 
 esac
 
 if ! (rm -r "$(dirname "$path")"); then
-    echo "error: failed to remove volume directory: $path" >&2
-    exit 3
+    tup_error 3 "failed to remove volume directory: $path"
 fi
 
 if [[ -t 1 ]]; then

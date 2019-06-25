@@ -16,6 +16,8 @@ fi
 
 . "$TUP_LIB_DIR/includes/common.inc"
 
+tup_conf_userload
+
 _cleanup() {
     tup_debug 1 "cleaning up"
     if [[ ! -z "$tmpid" && -d "$tmpdir" ]]; then
@@ -32,33 +34,47 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <name> { --layer <ref> | --path <path> } [ --help ] [ --labels <label>,... ]
+usage: $TUP_FRONT_CMD $(basename $0) <name> { --layers <ref>:<mount>,... | --path <path> } [ --plain | --squashfs | --tgz ] [ --parent <ref> ] [ --help ] [ --labels <label>,... ] [ --boot | --entrypoint <cmd> ]
 
 Create a new image named <name>, using either layer <ref> or the contents of
 <path> as it's filesystem.
 
 Arguments:
 
-    name      The name the image
+    name          The name the image
 
-    --help    Print usage information
-    --labels  Labels to apply to the image
-    --layer   The layer ref to use as the image's filesystem
-    --path    The path containing the image's filesystem
+    --boot        Containers based on this image should be booted
+    --entrypoint  Containers based on this image should run <cmd> on start
+    --help        Print usage information
+    --labels      Labels to apply to the image
+    --layers      One or more <ref>:<mount> pairs to use as the image's filesystem
+    --parent      Set <ref> as the parent of the image
+    --path        The path containing the image's filesystem
+    --plain       Create layer using plain format
+    --squashfs    Create layer using squashfs format
+    --tgz         Create layer using tgz format
+    --volumes     One or more <volume>:<mountpoint> pairs to use as the image's filesystem
 
 EOF
     exit 1
 }
 
 tup_getopt_required=(1)
-tup_getopt_optional=(help labels: layer: path:)
+tup_getopt_optional=(boot entrypoint: help labels: layers: parent: path: plain squashfs tgz volumes:)
 while tup_getopt; do
     case $tup_getopt_name in
         1) name=$tup_getopt_value ;;
+        boot) opt_boot=1 ;;
+        entrypoint) opt_entrypoint=$tup_getopt_value ;;
         help) _usage ;;
         labels) opt_labels=$tup_getopt_value ;;
-        layer) opt_layer=$tup_getopt_value ;;
+        layers) opt_layers=$tup_getopt_value ;;
+        parent) opt_parent=$tup_getopt_value ;;
         path) opt_path=$tup_getopt_value ;;
+        plain) opt_layer_format="plain" ;;
+        squashfs) opt_layer_format="squashfs" ;;
+        tgz) opt_layer_format="tgz" ;;
+        volumes) opt_volumes=$tup_getopt_value ;;
     esac
 done
 
@@ -70,24 +86,30 @@ if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
     _usage
 fi
 
-if [[ ! -z "$opt_layer" && ! -z "$opt_path" ]]; then
-    echo "error: either '--layer' or '--path' can be specified, not both" >&2
-    exit 1
+if [[ ! -z $opt_layers && ! -z $opt_volumes ]] \
+   || [[ ! -z $opt_path && ! -z $opt_layers ]] \
+   || [[ ! -z $opt_path && ! -z $opt_volumes ]]; then
+    tup_error 1 "only one of --layer, --path, or --volume can be specified"
 fi
 
+if [[ ! -z $opt_layer_format && ! -z $opt_layers ]]; then
+    echo "warning: using --${opt_layer_format} with --layers doesn't make sense, ignoring" >&2
+fi
 
 #
 # check prerequisites
 #
 
-if [[ ! -z "$opt_path" && ! -d "$opt_path" ]]; then
-    echo "error: path doesn't exist: $opt_path" >&2
-    exit 2
+if [[ ! -z $opt_path && ! -d "$opt_path" ]]; then
+    tup_error 2 "path doesn't exist: $opt_path"
 fi
 
-if [[ ! -z "$opt_layer" ]] && ! layerid=$(tup refparse --layer "$opt_layer"); then
-    echo "error: layer doesn't exist: $opt_layer" >&2
-    exit 2
+if [[ ! -z $opt_parent ]] && ! parentid=$(tup refparse --image "$opt_parent"); then
+    tup_error 2 "parent image doesn't exist: $opt_parent"
+fi
+
+if [[ ! -z $opt_boot && ! -z $opt_entrypoint ]]; then
+    tup_error 2 "only one of --boot or --entrypoint can be specified"
 fi
 
 
@@ -95,37 +117,75 @@ fi
 # main
 #
 
-if [[ -z "$layerid" ]]; then
-    tup_debug 1 "creating new layer from path: $opt_path"
-    # create the new layer
-    if ! layerid=$(tup layer create "$opt_path" --format squashfs | cut -d\  -f3); then
-        echo "error: failed to initialize image: $name" >&2
-        exit 4
-    fi
-else
-    tup_debug 1 "using existing layer $layerid"
-    if ! layerid=$(tup refparse --layer "$opt_layer"); then
-        echo "error: layer doesn't exist; $opt_layer" >&2
-        exit 2
-    fi
-fi
-
 tmpid=$(tup_sum_str $name $(date))
 tmpdir="$TUP_STORAGE_DIR/staging/$tmpid"
 
 if ! (mkdir -p "$tmpdir"); then
-    echo "error: failed to create temporary image directory: $tmpdir" >&2
-    exit 3
+    tup_error 3 "failed to create temporary image directory: $tmpdir"
 fi
 tup_debug 1 "created temporary image directory $tmpdir"
 
 touch "$tmpdir/conf"
+tup_conf set path "$tmpdir/conf" author "$TUP_USER_NAME <$TUP_USER_EMAIL>"
 tup_conf set path "$tmpdir/conf" name $name
 tup_conf set path "$tmpdir/conf" date $(date --iso-8601=seconds)
-tup_conf set path "$tmpdir/conf" volumes $layerid
 
-if [[ ! -z "$opt_labels" ]]; then
-    tup_conf set path "$tmpdir/conf" labels $(echo $opt_labels | tr , \ )
+if [[ ! -z $opt_path ]]; then
+
+    tup_debug 1 "creating new layer from path: $opt_path"
+
+    if [[ ! -z $opt_layer_format ]]; then
+        opt_layer_format="--$opt_layer_format"
+    fi
+
+    # create the new layer
+    if ! layerid=$(tup layer create --path "$opt_path" $opt_layer_format); then
+        tup_error 4 "failed to initialize image: $name"
+    fi
+
+    tup_conf set path "$tmpdir/conf" layers $layerid:/
+
+elif [[ ! -z $opt_layers ]]; then
+
+    hasroot=0
+    if [[ ! -z $opt_layers ]]; then
+
+        layers=()
+        for i in ${opt_layers/,/ }; do
+            layer=(${i/:/ })
+            tup_debug 2 "image create: checking layer ${layer[0]}:${layer[1]}"
+            if ! layerid=$(tup refparse --layer "${layer[0]}"); then
+                tup_error 2 "layer doesn't exist: ${layer[0]}"
+            fi
+            if [[ ${layer[1]} = "/" ]]; then
+                hasroot=1
+            fi
+            layers=(${layers[@]} $layerid:${layer[1]})
+        done
+    fi
+
+    if [[ $hasroot = 0 ]]; then
+        tup_error 2 "no root filesystem specified"
+    fi
+
+    tup_conf set path "$tmpdir/conf" layers "${layers[@]}"
+
+fi
+
+if [[ ! -z $parentid ]]; then
+    tup_conf set path "$tmpdir/conf" parent "$parentid"
+fi
+
+if [[ ! -z $opt_labels ]]; then
+    tup_conf set path "$tmpdir/conf" labels ${labels/,/ }
+fi
+
+if [[ ! -z $opt_boot ]]; then
+    tup_conf set path "$tmpdir/conf" boot true
+fi
+
+if [[ ! -z $opt_entrypoint ]]; then
+    tup_conf set path "$tmpdir/conf" entrypoing "$opt_entrypoint"
 fi
 
 imageid=$(tup_sum_dir "$tmpdir")
@@ -133,13 +193,11 @@ path=$(tup_path "$imageid")
 pdir=$(dirname $path);
 
 if ! (mkdir -p "$TUP_STORAGE_DIR/images/$pdir"); then
-    echo "error: failed to create images parent directory: $TUP_STORAGE_DIR/images/$pdir" >&2
-    exit 3
+    tup_error 3 "failed to create images parent directory: $TUP_STORAGE_DIR/images/$pdir"
 fi
 
 if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/images/$pdir/$imageid"); then
-    echo "error: failed to create image dir $TUP_STORAGE_DIR/images/$path" >&2
-    exit 3
+    tup_error 3 "failed to create image dir $TUP_STORAGE_DIR/images/$path"
 fi
 tup_debug 1 "moved $tmpdir to $TUP_STORAGE_DIR/images/$path"
 

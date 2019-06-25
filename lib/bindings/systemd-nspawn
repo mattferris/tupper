@@ -1,0 +1,38 @@
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+#
+# Bindings for systemd-nspawn
+#
+
+tup_mechanism_start() {
+    local opts="-q --register=yes -D $TUP_MECHANISM_ROOT -M $TUP_MECHANISM_NAME"
+    if [[ $TUP_MECHANISM_BOOT = "true" ]]; then
+        opts="$opts -b"
+    fi
+    (exec systemd-nspawn $opts >/dev/null) &
+    return $?
+}
+
+tup_mechanism_stop() {
+    local opts="poweroff $TUP_MECHANISM_NAME"
+}
+
+tup_mechanism_reboot() {
+    local one=$1
+}
+
+tup_mechanism_run_existing() {
+    local one=$1
+}
+
+tup_mechanism_run_new() {
+    local cmd=$@
+    local opts="-q -D $TUP_MECHANISM_ROOT -- $cmd"
+    (exec systemd-nspawn $opts)
+    return $?
+}

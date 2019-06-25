@@ -7,4 +7,149 @@
 # github.com/mattferris/tupper/blob/master/License.txt
 #
 
-exec "$TUP_LIB_DIR/list" image $@
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+trap tup_error ERR
+
+
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
+
+usage: $TUP_FRONT_CMD $(basename $0) [ --with-label <label> ] [ --date ] [ --full-id ] [ --help ] [ --id-only ] [ --labels ] [ --long ] [ --name ]
+
+List images. If --label is specified, list images labelled with <label>.
+
+Arguments:
+
+    General options:
+
+        --help  Print usage information
+
+    Filter options:
+
+        --with-label  List images labelled with <label>
+
+    Display options:
+
+        --date     Show creation date and time
+        --full-id  Show full image IDs instead of partials ones
+        --id-only  Only dislay image IDs (implies --long)
+        --labels   Show image labels
+        --long     Equivalent --date --labels --name
+        --name     Show the name of the image
+
+EOF
+    exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=()
+tup_getopt_optional=(date full-id help id-only labels long name with-label:)
+while tup_getopt; do
+    case $tup_getopt_name in
+        date) opt_date=1 ;;
+        full-id) opt_full_id=1 ;;
+        help) _usage ;;
+        id-only) opt_id_only=1 ;;
+        labels) opt_labels=1 ;;
+        long) opt_date=1; opt_labels=1; opt_name=1 ;;
+        name) opt_name=1 ;;
+        with-label) opt_with_label=$tup_getopt_value ;;
+    esac
+done
+
+# handle option errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
+fi
+
+
+#
+# main
+#
+
+if [[ -t 1 && -z $opt_id_only ]]; then
+
+    if [[ ! -z $opt_full_id ]]; then
+        printf "%-65s" ID
+    else
+        printf "%-13s" ID
+    fi
+
+    if [[ ! -z $opt_name ]]; then
+        printf "%-16s" Name
+    fi
+
+    if [[ ! -z $opt_date ]]; then
+        printf "%-18s" Date
+    fi
+
+    if [[ ! -z $opt_labels ]]; then
+        printf "%-s" Labels
+    fi
+
+    echo
+fi
+
+for i in $(tup_list_images); do
+    if [[ ! -z "$opt_with_label" ]]; then
+       labels=$(tup_conf get image $i labels) 
+       matched=0
+       for label in $labels; do
+           if [[ $opt_with_label = $label ]]; then
+               matched=1
+           fi
+       done
+       if [[ $matched = 0 ]]; then
+           continue
+       fi
+    fi
+
+    if [[ ! -z $opt_full_id ]]; then
+        printf "%-65s" $i
+    else
+        printf "%-13s" ${i:0:12}
+    fi
+
+    if [[ ! -z $opt_id_only ]]; then
+        echo
+        continue
+    fi
+
+    if [[ ! -z $opt_name ]]; then
+        name=$(tup_conf get image $i name)
+        if [[ ${#name} -ge 16 ]]; then
+            name="${name:0:12}..."
+        fi
+        printf "%-16s" "$name"
+    fi
+
+    if [[ ! -z $opt_date ]]; then
+        printf "%-18s" "$(tup_date $(tup_conf get image $i date))"
+    fi
+
+    if [[ ! -z $opt_labels ]]; then
+        printf "%-s" "$(tup_conf get image $i labels)"
+    fi
+
+    echo
+done
+
+exit 0

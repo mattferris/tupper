@@ -27,11 +27,11 @@ _usage() {
 
 usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --help ]
 
-Destroy a layer.
+Destroy an image.
 
 Arguments:
 
-    ref     The layer to destory
+    ref     The image to destory
 
     --help  Print usage information
 
@@ -66,18 +66,18 @@ fi
 # main
 #
 
-if ! layerid=$(tup refparse --layer "$ref"); then
-    tup_error 2 "layer doesn't exist: $ref" >&2
+if ! imageid=$(tup refparse --image "$ref"); then
+    tup_error 2 "image doesn't exist: $ref"
 fi
 
-if ! (rm -r "$TUP_STORAGE_DIR/layers/$(tup_path $layerid)"); then
-    tup_error 3 "failed to destroy layer: $layerid"
+if ! (rm -r "$TUP_STORAGE_DIR/images/$(tup_path $imageid)"); then
+    tup_error 3 "failed to destroy images: $imageid"
 fi
 
 if [[ -t 1 ]]; then
-    echo -n "destroyed layer "
+    echo -n "destroyed image "
 fi
 
-echo $layerid
+echo $imageid
 
 exit 0

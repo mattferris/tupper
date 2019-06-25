@@ -1,0 +1,114 @@
+#!/bin/bash
+#
+# tupper - A container image manager
+#
+# Copyright (c) 2018 Matt Ferris <matt@bueller.ca>
+# Licensed under BSD 2-clause license
+# github.com/mattferris/tupper/blob/master/License.txt
+#
+
+set -e
+
+if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
+    echo "error: can't locate common.inc" >&2
+    exit 1
+fi
+
+. "$TUP_LIB_DIR/includes/common.inc"
+
+trap tup_error ERR
+
+
+#
+# print usage
+#
+_usage() {
+    cat <<EOF
+
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --help ] [ --lineage ] [ --long-id ]
+
+Verify an image's checksum.
+
+Arguments:
+
+    ref        The image to verify
+
+    --help     Print usage information
+    --lineage  Verify the specified image as well as it's ancestors
+    --long-id  Print the full image ID
+
+EOF
+    exit 1
+}
+
+
+#
+# parse args
+#
+
+tup_getopt_required=(1)
+tup_getopt_optional=(help lineage long-id)
+while tup_getopt; do
+    case $tup_getopt_name in
+        1) ref=$tup_getopt_value ;;
+        help) _usage ;;
+        lineage) opt_lineage=1 ;;
+        long-id) opt_long_id=1 ;;
+    esac
+done
+
+# handle getopt errors
+tup_error_getopt
+
+# check for missing required options
+if [[ ${#tup_getopt_required[@]} -ge 1 ]]; then
+    _usage
+fi
+
+
+#
+# check prerequisites
+#
+
+if ! imageid=$(tup refparse --image "$ref"); then
+    tup_error 2 "image doesn't exist: $ref"
+fi
+
+
+#
+# main
+#
+
+while [[ ! -z "$imageid" ]]; do
+    outid=""
+    if [[ $opt_long_id = 1 ]]; then
+        outid=$imageid
+    else
+        outid=${imageid:0:12}
+    fi
+
+    for layer in $(tup_conf get image $imageid layers); do
+        parts=(${layer/:/ /})
+        layerid=${parts[0]}
+        if ! (tup layer verify "$layerid" >&1 >/dev/null); then
+            tup_error 4 "failed (layer $layerid failed verification)"
+        fi
+        tup_debug 1 "verified layer $layerid"
+    done
+
+    imagesum=$(tup_sum_dir "$TUP_STORAGE_DIR/images/$(tup_path $imageid)")
+    if [[ ! $imagesum = $imageid ]]; then
+        echo "$outid failed (expected $imageid, got $imagesum)"
+        exit 1 
+    fi
+
+    echo "$outid ok"
+
+    if [[ $opt_lineage = 1 ]]; then
+        imageid=$(tup_conf get image $imageid parent)
+    else
+        imageid=""
+    fi
+done
+
+exit 0

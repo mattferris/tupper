@@ -71,8 +71,7 @@ fi
 #
 
 if ! layerid=$(tup refparse --layer "$ref"); then
-    echo "error: layer doesn't exist: $ref" >&2
-    exit 2
+    tup_error 2 "layer doesn't exist: $ref"
 fi
 
 
@@ -81,30 +80,39 @@ fi
 #
 
 while [[ ! -z "$layerid" ]]; do
+    outid=""
     if [[ $opt_long_id = 1 ]]; then
-        echo -n $layerid
+        outid=$layerid
     else
-        echo -n ${layerid:0:12}
+        outid=${layerid:0:12}
     fi
 
-    fs="$TUP_STORAGE_DIR/layers/$(tup_path $layerid)/fs"
+    layerdir="$TUP_STORAGE_DIR/layers/$(tup_path $layerid)"
+    filesystemid=$(tup_conf get layer $layerid filesystem)
+    fsdir="$TUP_STORAGE_DIR/filesystems/$(tup_path $filesystemid)"
+
     case $(tup_conf get layer $layerid format) in
 
-        plain) sum=$(tup_sum_dir "$fs") ;;
-        squashfs) sum=$(tup_sum_file "$fs") ;;
-        tgz) sum=$(tup_sum_file "$fs") ;;
-        *) echo "error: invalid format for layer: $layerid" >&2; exit 2
+        plain) sum=$(tup_sum_dir "$fsdir") ;;
+        squashfs) sum=$(tup_sum_file "$fsdir") ;;
+        tgz) sum=$(tup_sum_file "$fsdir") ;;
+        *) tup_error 2 "invalid format for layer: $layerid" ;;
 
     esac
 
-    layersum=$(tup_conf get layer $layerid checksum)
-    if [[ $sum = $layersum ]]; then
-        echo -n " ok"
-    else
-        echo -n " failed (expected $layersum, got $sum)"
+    if [[ ! $sum = $filesystemid ]]; then
+        echo "$outid failed (filesystem: expected $filesystem, got $sum)"
+        exit 1
+    fi
+    tup_debug 1 "verified filesystem $filesystemid"
+
+    fullsum=$(tup_sum_dir "$dir")
+    if [[ ! $fullsum = $layerid ]]; then
+        echo "$outid failed (expected $layerid, got $fullsum)"
+        exit 1
     fi
 
-    echo
+    echo "$outid ok"
 
     if [[ $opt_lineage = 1 ]]; then
         layerid=$(tup_conf get layer $layerid parent)

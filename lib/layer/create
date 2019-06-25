@@ -32,26 +32,24 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <path> [ --help ] [ --labels <label>,... ] [ --parent <ref> ] [ --plain | --squashfs | --tgz ] [ --squashfs-opts <opts> ] [ --tar-opts <opts> ]
+usage: $TUP_FRONT_CMD $(basename $0) { --filesystem <ref> | --path <path> } [ --help ] [ --labels <label>,... ] [ --parent <ref> ] [ --plain | --squashfs | --tgz ] [ --squashfs-opts <opts> ] [ --tar-opts <opts> ]
 
 Create a new layer, using <path> as it's filesystem.
 
 Arguments:
 
-    path      The path containing the layer's filesystem
+    --help           Print usage information
+    --filesystem     Use <ref> as the filesystem for the layer
+    --labels         Labels to apply to the layer
+    --path           Use <path> as the filesystem for the layer
+    --parent         Set <ref> as the parent of the layer
+    --plain          Save the layer's filesystem as a plain directory
+    --squashfs       Save the layer's filesystem as a squashfs volume (default)
+    --squashfs-opts  Options to pass to squashfs
+    --tar-opts       Options to pass to tar
+    --tgz            Save the layer's filesystem as a gzipped tarball
 
-    --help      Print usage information
-    --labels    Labels to apply to the layer
-    --parent    Set <ref> as the parent of the layer
-    --plain     Save the layer's filesystem as a plain directory
-    --squashfs  Save the layer's filesystem as a squashfs volume (default)
-    --tgz       Save the layer's filesystem as a gzipped tarball
-
-    --squashfs-opts
-              Options to pass to squashfs
-
-    --tar-opts
-              Options to pass to tar
+                  
 
 EOF
     exit 1
@@ -64,13 +62,14 @@ EOF
 
 format="squashfs"
 
-tup_getopt_required=(1)
-tup_getopt_optional=(help labels: parent: plain squashfs squashfs-opts: tar-opts: tgz)
+tup_getopt_required=()
+tup_getopt_optional=(help filesystem: labels: path: parent: plain squashfs squashfs-opts: tar-opts: tgz)
 while tup_getopt; do
     case $tup_getopt_name in
-        1) path=$tup_getopt_value ;;
         help) _usage ;;
+        filesystem) opt_filesystem=$tup_getopt_value ;;
         labels) opt_labels=$tup_getopt_value ;;
+        path) opt_path=$tup_getopt_value ;;
         parent) opt_parent=$tup_getopt_value ;;
         plain) format="plain" ;;
         squashfs) format="squashfs" ;;
@@ -93,14 +92,22 @@ fi
 # check prerequisites
 #
 
-if [[ ! -d "$path" ]]; then
-    echo "error: path doesn't exist: $path" >&2
-    exit 2
+if [[ ! -z "$opt_filesystem" && ! -z "$opt_path" ]]; then
+    tup_error 2 "only one of --filesystem or --path can be specified"
+elif [[ -z "$opt_filesystem" && -z "$opt_path" ]]; then
+    tup_error 2 "one of --filesystem or --path must be specified"
+fi
+
+if [[ ! -z "$opt_path" && ! -d "$opt_path" ]]; then
+    tup_error 2 "path doesn't exist: $opt_path"
 fi
 
 if [[ ! -z "$opt_parent" ]] && ! parentid=$(tup refparse --layer "$opt_parent"); then
-    echo "error: parent layer doesn't exist: $opt_parent" >&2
-    exit 2
+    tup_error 2 "parent layer doesn't exist: $opt_parent"
+fi
+
+if [[ ! -z "$opt_filesystem" ]] && ! filesystemid=$(tup refparse --filesystem "$opt_filesystem"); then
+    tup_error 2 "filesystem doesn't exist: $opt_filesystem"
 fi
 
 #
@@ -111,60 +118,55 @@ tmpid=$(tup_sum_str $path $(date))
 tmpdir="$TUP_STORAGE_DIR/staging/$tmpid"
 
 if ! (mkdir -p "$tmpdir"); then
-    echo "error: failed to create temporary layer directory: $tmpdir" >&2
-    exit 3
+    tup_error 3 "failed to create temporary layer directory: $tmpdir"
 fi
 tup_debug 1 "created temporary layer directory $tmpdir"
 
 
 #
-# import filesystem into specified format
+# import filesystem into specified format (if --path)
 #
 
 touch "$tmpdir/conf"
 
-case $format in
+if [[ ! -z "$opt_path" ]]; then
+    case $format in
 
-    plain)
-        if ! (cp -rp "$path" "$tmpdir/fs"); then
-            echo "error: failed to copy path: $path" >&2
-            exit 3
-        fi
-        tup_debug 1 "copied $path to $tmpdir/fs"
-        tup_conf set path "$tmpdir/conf" format plain
-        fssum=$(tup_sum_dir "$tmpdir/fs")
-        ;;
+        plain)
+            if ! (cp -rp "$opt_path" "$tmpdir/fs"); then
+                tup_error 3 "error: failed to copy path: $opt_path"
+            fi
+            tup_debug 1 "copied $opt_path to $tmpdir/fs"
+            filesytemid=$(tup_sum_dir "$tmpdir/fs")
+            ;;
 
-    squashfs)
-        tup_debug 2 "mksquashfs $path $tmpdir/fs -no-progress $opt_squashfs_opts"
-        if ! (mksquashfs "$path" "$tmpdir/fs" -no-progress $opt_squashfs_opts 2>&1 >/dev/null); then
-            echo "error: failed to create squashfs from path: $path" >&2
-            exit 3
-        fi
-        tup_debug 1 "created squashfs from $path"
-        tup_conf set path "$tmpdir/conf" format squashfs
-        fssum=$(tup_sum_file "$tmpdir/fs")
-        ;;
+        squashfs)
+            tup_debug 2 "mksquashfs $opt_path $tmpdir/fs -no-progress $opt_squashfs_opts"
+            if ! (mksquashfs "$opt_path" "$tmpdir/fs" -no-progress $opt_squashfs_opts 2>&1 >/dev/null); then
+                tup_error 3 "failed to create squashfs from path: $opt_path"
+            fi
+            tup_debug 1 "created squashfs from $opt_path"
+            filesystemid=$(tup_sum_file "$tmpdir/fs")
+            ;;
 
-    tgz)
-        tup_debug 2 "tar czf $tmpdir/fs --acls --xattrs $opt_tar_opts $path"
-        if ! (tar czf "$tmpdir/fs" --acls --xattrs $opt_tar_opts "$path" 2>&1 >/dev/null); then
-            echo "error: failed to create tarball from path: $path" >&2
-            exit 3
-        fi
-        tup_debug 1 "create tarball from $path"
-        tup_conf set path "$tmpdir/conf" format tgz
-        fssum=$(tup_sum_file "$tmpdir/fs")
-        ;;
+        tgz)
+            tup_debug 2 "tar czf $tmpdir/fs --acls --xattrs $opt_tar_opts $opt_path"
+            if ! (tar czf "$tmpdir/fs" --acls --xattrs $opt_tar_opts "$opt_path" 2>&1 >/dev/null); then
+                tup_error 3 "failed to create tarball from path: $opt_path"
+            fi
+            tup_debug 1 "create tarball from $opt_path"
+            filesystemid=$(tup_sum_file "$tmpdir/fs")
+            ;;
 
-    *)
-        echo "error: invalid format specified: $format" >&2
-        exit 1
-        ;;
+        *)
+            tup_error 1 "invalid format specified: $format"
+            ;;
 
-esac
+    esac
+fi
 
-tup_conf set path "$tmpdir/conf" checksum $fssum
+tup_conf set path "$tmpdir/conf" format $format
+tup_conf set path "$tmpdir/conf" filesystem $filesystemid
 tup_conf set path "$tmpdir/conf" date $(date --iso-8601=seconds)
 
 if [[ ! -z "$opt_labels" ]]; then
@@ -175,6 +177,20 @@ if [[ ! -z "$parentid" ]]; then
     tup_conf set path "$tmpdir/conf" parent $parentid
 fi
 
+if ! (tup refparse --filesystem "$filesystemid"); then
+    tup_debug 1 "creating filesystem $filesystemid"
+
+    fsdir="$TUP_STORAGE_DIR/filesystems/$(tup_path "$filesystemid")"
+    if ! (mkdir -p "$(dirname "$fsdir")"); then
+        tup_error 3 "failed to create filesystem dir $(dirname $fsdir)"
+    fi
+    if ! (mv "$tmpdir/fs" "$fsdir"); then
+        tup_error 3 "failed to create filesystem: $filesystemid"
+    fi
+else
+    tup_debug 1 "using existing filesystem $filesystemid"
+fi
+
 layerid=$(tup_sum_dir "$tmpdir")
 tup_debug 1 "calculated layer checksum $layerid"
 
@@ -182,13 +198,11 @@ path=$(tup_path $layerid)
 pdir=$(dirname $path);
 
 if ! (mkdir -p "$TUP_STORAGE_DIR/layers/$pdir"); then
-    echo "error: failed to create container parent directory: $TUP_STORAGE_DIR/layers/$pdir" >&2
-    exit 3
+    tup_error 3 "failed to create layer parent directory: $TUP_STORAGE_DIR/layers/$pdir"
 fi
 
 if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/layers/$pdir/$layerid"); then
-    echo "error: failed to create container dir $TUP_STORAGE_DIR/layers/$path" >&2
-    exit 3
+    tup_error 3 "failed to create layer directory $TUP_STORAGE_DIR/layers/$path"
 fi
 tup_debug 1 "moved $tmpdir to $TUP_STORAGE_DIR/layers/$path"
 
