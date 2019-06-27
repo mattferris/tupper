@@ -168,6 +168,11 @@ tup_warn() {
     exit $code
 }
 
+# print notice messages
+tup_notice() {
+    echo "notice: $@" >&2
+}
+
 
 #
 # object tests

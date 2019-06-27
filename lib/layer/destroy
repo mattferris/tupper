@@ -10,7 +10,7 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: layer destroy: can't locate common.inc" >&2
     exit 1
 fi
 
@@ -67,11 +67,11 @@ fi
 #
 
 if ! layerid=$(tup refparse --layer "$ref"); then
-    tup_error 2 "layer doesn't exist: $ref" >&2
+    tup_error 2 "layer destroy: layer doesn't exist: $ref" >&2
 fi
 
 if ! (rm -r "$TUP_STORAGE_DIR/layers/$(tup_path $layerid)"); then
-    tup_error 3 "failed to destroy layer: $layerid"
+    tup_error 3 "layer destroy: failed to destroy layer: $layerid"
 fi
 
 if [[ -t 1 ]]; then

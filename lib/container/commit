@@ -10,14 +10,14 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: container commit: can't locate common.inc" >&2
     exit 1
 fi
 
 . "$TUP_LIB_DIR/includes/common.inc"
 
 _cleanup() {
-    tup_debug 1 "cleaning up"
+    tup_debug 1 "container commit: cleaning up"
     if [[ ! -z "$tmpdir" && -d "$tmpdir" ]]; then
         rm -r "$tmpdir" 2>&1 >/dev/null
     fi
@@ -32,17 +32,20 @@ trap tup_error ERR
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --labels <label>,... | --extra-labels >label>,... ] [ --help ]
+usage: $TUP_FRONT_CMD $(basename $0) <ref> [ --plain | --squashfs | --tgz ] [ --labels <label>,... | --extra-labels <label>,... ] [ --help ]
 
-Mount a volume.
+Commit changes made in the container.
 
 Arguments:
 
-    ref             The source of the volume
+    ref             The container to commit
 
     --help          Print usage information
     --extra-labels  Additional labels for the layer
     --labels        Override labels assigned to the volume
+    --plain         Commit volume in plain format
+    --squashfs      Commit volume in squashfs format
+    --tgz           Commit volume in tgz format
 
 EOF
     exit 1
@@ -54,13 +57,16 @@ EOF
 #
 
 tup_getopt_required=(1)
-tup_getopt_optional=(help extra-labels: labels:)
+tup_getopt_optional=(help extra-labels: labels: plain squashfs tgz)
 while tup_getopt; do
     case $tup_getopt_name in
         1) ref=$tup_getopt_value ;;
-        extra-labels) opt_extra_labels=$tup_getopt_value ;;
-        labels) opt_labels=$tup_getopt_value ;;
+        extra-labels) opt_args="$opt_args --extra-labels $tup_getopt_value" ;;
         help) _usage ;;
+        labels) opt_args="$opt_args --labels $tup_getopt_value" ;;
+        plain) opt_args="$opt_args --plain" ;;
+        squashfs) opt_args="$opt_args --squashfs" ;;
+        tgz) opt_args="$opt_args --tgz" ;;
     esac
 done
 
@@ -78,70 +84,17 @@ fi
 #
 
 if ! containerid=$(tup refparse --container "$ref"); then
-    tup_error 2 "container doesn't exist: $ref"
+    tup_error 2 "container commit: container doesn't exist: $ref"
 fi
 
-if [[ ! -z "$opt_extra_labels" && ! -z "$opt_labels" ]]; then
-    tup_error 2 "only one of --extra-labels and --labels must be specified"
+volumeid=$(tup_conf get container $containerid volume)
+if [[ -z $volumeid ]]; then
+    tup_error 2 "container commit: container doesn't have an active volume"
 fi
 
-
-#
-# main
-#
-
-name=$(tup_conf get container $containerid name)
-
-volumes=$(tup_conf get container $containerid volumes)
-layers=($(tup_conf get container $containerid layers))
-for vol in $volumes; do
-    volume=(${vol/:/ /})
-    if ! layerid=$(tup volume commit ${volume[0]}); then
-        layers=(${layers[@]} $layerid:${volume[1]})
-    fi
-done
-
-if [[ ${#layers[@]} = 0 ]]; then
-    tup_error 2 "container doesn't have any layers or volumes"
+if ! layerid=$(tup volume commit $volumeid $opt_args); then
+    tup_error 2 "container commit: failed to commit changes in container: $ref"
 fi
 
-labels=$(tup_conf get container $containerid labels)
-if [[ ! -z "$opt_extra_labels" ]]; then
-    opt_extra_labels=$(echo -n "$opt_extra_labels" | tr , \ )
-    labels="$labels $opt_extra_labels"
-elif [[ ! -z "$opt_labels" ]]; then
-    labels=$opt_labels
-fi
-
-if [[ ! -z "$labels" ]]; then
-    labels="--labels $(echo -n "$labels" | tr \  ,)"
-fi
-
-parent=$(tup_conf get container $containerid image)
-if [[ ! -z "$parent" ]]; then
-    parent="--parent $parent"
-fi
-
-boot=$(tup_conf get container $containerid boot)
-if [[ ! -z "$boot" ]]; then
-    boot="--boot"
-fi
-
-entrypoint=$(tup_conf get container $containerid entrypoint)
-if [[ ! -z "$entrypoint" ]]; then
-    entrypoint="--entrypoint \"$entrypoint\""
-fi
-
-layersarg=${layers[@]}
-tup_debug 2 "tup image create "$name" --layers ${layersarg/ /:/} $labels $parent $boot $entrypoint"
-if ! imageid=$(tup image create "$name" --layers ${layersarg/ /:/} $labels $parent $boot $entrypoint 2>/dev/null); then
-    tup_error 3 "failed to create image: $imageid"
-fi
-
-if [[ -t 1 ]]; then
-    echo -n "committed container as image "
-fi
-
-echo $imageid
-
-exit 0
+tup_conf set container $containerid layers $layerid:/
+tup_conf unset container $containerid volume

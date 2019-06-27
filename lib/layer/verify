@@ -10,7 +10,7 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: layer verify: can't locate common.inc" >&2
     exit 1
 fi
 
@@ -71,7 +71,7 @@ fi
 #
 
 if ! layerid=$(tup refparse --layer "$ref"); then
-    tup_error 2 "layer doesn't exist: $ref"
+    tup_error 2 "layer verify: layer doesn't exist: $ref"
 fi
 
 
@@ -96,20 +96,18 @@ while [[ ! -z "$layerid" ]]; do
         plain) sum=$(tup_sum_dir "$fsdir") ;;
         squashfs) sum=$(tup_sum_file "$fsdir") ;;
         tgz) sum=$(tup_sum_file "$fsdir") ;;
-        *) tup_error 2 "invalid format for layer: $layerid" ;;
+        *) tup_error 2 "layer verify: invalid format for layer: $layerid" ;;
 
     esac
 
     if [[ ! $sum = $filesystemid ]]; then
-        echo "$outid failed (filesystem: expected $filesystem, got $sum)"
-        exit 1
+        tup_error 1 "layer verify: $outid failed (filesystem: expected $filesystem, got $sum)"
     fi
-    tup_debug 1 "verified filesystem $filesystemid"
+    tup_debug 1 "layer verify: verified filesystem $filesystemid"
 
     fullsum=$(tup_sum_dir "$dir")
     if [[ ! $fullsum = $layerid ]]; then
-        echo "$outid failed (expected $layerid, got $fullsum)"
-        exit 1
+        tup_error 1 "layer verify: $outid failed (expected $layerid, got $fullsum)"
     fi
 
     echo "$outid ok"

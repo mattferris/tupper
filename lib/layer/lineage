@@ -10,7 +10,7 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: layer lineage: can't locate common.inc" >&2
     exit 1
 fi
 
@@ -73,8 +73,7 @@ fi
 #
 
 if ! layerid=$(tup refparse --layer "$ref"); then
-    echo "error: layer doesn't exist: $ref" >&2
-    exit 2
+    tup_error 2  "layer lineage: layer doesn't exist: $ref"
 fi
 
 

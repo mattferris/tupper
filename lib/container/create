@@ -10,14 +10,14 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: container create: can't locate common.inc" >&2
     exit 1
 fi
 
 . "$TUP_LIB_DIR/includes/common.inc"
 
 _cleanup() {
-    tup_debug 1 "cleaning up"
+    tup_debug 1 "container create: cleaning up"
     if [[ ! -z "$tmpdir" && -d "$tmpdir" ]]; then
         rm -r "$tmpdir" 2>&1 >/dev/null
     fi
@@ -89,7 +89,7 @@ fi
 
 # does the referenced image exist?
 if ! imageid=$(tup refparse --image "$image"); then
-    tup_error 2 "image doesn't exist: $image"
+    tup_error 2 "container create: image doesn't exist: $image"
 fi
 
 containerid=$(tup_sum_str "$name $imageid")
@@ -97,7 +97,7 @@ tmpdir="$TUP_STORAGE_DIR/staging/$containerid"
 
 # does a container with this name already exist?
 if [[ -d "$TUP_STORAGE_DIR/containers/$containerid" ]]; then
-    tup_error 2 "container already exists: $name"
+    tup_error 2 "container create: container already exists: $name"
 fi
 
 #
@@ -105,7 +105,7 @@ fi
 #
 
 if ! (mkdir -p "$tmpdir"); then
-    tup_error 3 "failed to create container directory: $tmpdir"
+    tup_error 3 "container create: failed to create container directory: $tmpdir"
 fi
 
 touch "$tmpdir/conf"
@@ -134,11 +134,11 @@ path=$(tup_path $containerid)
 pdir=$(dirname $path);
 
 if ! (mkdir -p "$TUP_STORAGE_DIR/containers/$pdir"); then
-    tup_error 3 "failed to create container parent directory: $TUP_STORAGE_DIR/containers/$pdir"
+    tup_error 3 "container create: failed to create container parent directory: $TUP_STORAGE_DIR/containers/$pdir"
 fi
 
 if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/containers/$pdir"); then
-    tup_error 3 "failed to create container dir $TUP_STORAGE_DIR/containers/$path"
+    tup_error 3 "container create: failed to create container dir $TUP_STORAGE_DIR/containers/$path"
 fi
 
 if [[ -t 1 ]]; then

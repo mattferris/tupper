@@ -10,14 +10,14 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: volume create: can't locate common.inc" >&2
     exit 1
 fi
 
 . "$TUP_LIB_DIR/includes/common.inc"
 
 _cleanup() {
-    tup_debug 1 "cleaning up"
+    tup_debug 1 "volume create: cleaning up"
     if [[ ! -z "$tmpdir" && -d "$tmpdir" ]]; then
         rm -r "$tmpdir" 2>&1 >/dev/null
     fi
@@ -90,12 +90,12 @@ fi
 #
 
 if [[ -z "$opt_filesystem"  && ! $format = "empty" && ! -d "$source" && ! -f "$source" ]]; then
-    tup_error 2 "source doesn't exist: $source"
+    tup_error 2 "volume create: source doesn't exist: $source"
 fi
 
 if [[ ! -z $opt_filesystem ]]; then 
     if ! filesystemid=$(tup refparse --filesystem "$source"); then
-        tup_error 2 "filesystem doesn't exist: $source"
+        tup_error 2 "volume create: filesystem doesn't exist: $source"
     fi
     source="$TUP_STORAGE_DIR/filesystems/$(tup_path $filesystemid)"
 fi
@@ -108,7 +108,7 @@ if  [[ $format = "empty" ]]; then
 fi
 
 if [[ ! -z "$opt_layer" ]] && ! layerid=$(tup refparse --layer "$opt_layer"); then
-    tup_error 2 "layer doesn't exist: $opt_layer"
+    tup_error 2 "volume create: layer doesn't exist: $opt_layer"
 fi
 
 vdir="$TUP_STORAGE_DIR/volumes/$(tup_path "$volumeid")"
@@ -118,7 +118,7 @@ if [[ -d "$vdir" ]]; then
         echo -n "existing volume "
     fi
     echo $volumeid
-    tup_warn 100 "volume is already mounted: $volumeid"
+    tup_warn 100 "volume create: volume is already mounted: $volumeid"
 fi
 
 #
@@ -127,7 +127,7 @@ fi
 
 tmpdir="$TUP_STORAGE_DIR/staging/$(tup_path $volumeid)"
 if ! (mkdir -p "$tmpdir"); then
-    tup_error 4 "failed to create staging directory: $tmpdir"
+    tup_error 4 "volume create: failed to create staging directory: $tmpdir"
 fi
 
 target="$tmpdir/mount"
@@ -135,39 +135,39 @@ case $format in
 
     empty)
         if ! (mkdir -p "$target"); then
-            tup_error 3 "failed to create empty mount"
+            tup_error 3 "volume create: failed to create empty mount"
         fi
         ;;
 
     plain)
         if ! (cp -rp "$source" "$target"); then
-            tup_error 3 "failed to copy source: $source"
+            tup_error 3 "volume create: failed to copy source: $source"
         fi
-        tup_debug 1 "copied $source to $target"
+        tup_debug 1 "volume create: copied $source to $target"
         ;;
 
     squashfs)
         if ! (mkdir "$target"); then
-            tup_error 3 "failed to create volume directory: $target"
+            tup_error 3 "volume create: failed to create volume directory: $target"
         fi
         if ! (mount -t squashfs "$source" "$target" 2>&1 >/dev/null); then
-            tup_error 3 "failed to mount squashfs: $source in $target"
+            tup_error 3 "volume create: failed to mount squashfs: $source in $target"
         fi
-        tup_debug 1 "mounted squashfs $source in $target"
+        tup_debug 1 "volume create: mounted squashfs $source in $target"
         ;;
 
     tgz)
         if ! (mkdir "$target"); then
-            tup_error 3 "failed to create volume directory: $target"
+            tup_error 3 "volume create: failed to create volume directory: $target"
         fi
         if ! (tar -C "$target" -xzf "$source" 2>&1 >/dev/null); then
-            tup_error 3 "failed to extract tarball from source: $source"
+            tup_error 3 "volume create: failed to extract tarball from source: $source"
         fi
-        tup_debug 1 "extracted tarball $source to $target"
+        tup_debug 1 "volume create: extracted tarball $source to $target"
         ;;
 
     *)
-        tup_error 1 "invalid format specified: $format"
+        tup_error 1 "volume create: invalid format specified: $format"
         ;;
 
 esac
@@ -188,12 +188,12 @@ if [[ ! -z "$layerid" ]]; then
 fi
 
 if ! (mkdir -p "$(dirname "$vdir")"); then
-    tup_error 4 "failed to create volume directory: $vdir"
+    tup_error 4 "volume create: failed to create volume directory: $vdir"
 fi
-tup_debug 1 "created volume directory $vdir"
+tup_debug 1 "volume create: created volume directory $vdir"
 
 if ! (mv "$tmpdir" "$(dirname "$vdir")"); then
-    tup_error 4 "failed to move staging directory: $tmpdir"
+    tup_error 4 "volume create: failed to move staging directory: $tmpdir"
 fi
 
 if [[ -t 1 ]]; then

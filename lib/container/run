@@ -10,18 +10,26 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: container run: can't locate common.inc" >&2
     exit 1
 fi
 
 . "$TUP_LIB_DIR/includes/common.inc"
 
 _cleanup() {
-    if [[ ! -z $volumeid ]]; then
-        tup volume destroy $volumeid
+    if [[ ! -z $mntdir && -f "$mntdir/../bindmounts" ]]; then
+        for i in $(cat "$mntdir/../bindmounts"); do
+            umount "$i"
+        done
+    fi
+    if [[ $opt_epheneral != 1 ]]; then
+        return
     fi
     if [[ ! -z $upperid ]]; then
         tup volume destroy $upperid
+    fi
+    if [[ ! -z $volumeid ]]; then
+        tup volume destroy $volumeid
     fi
 }
 trap _cleanup EXIT KILL
@@ -33,19 +41,21 @@ trap _cleanup EXIT KILL
 _usage() {
     cat <<EOF
 
-usage: $TUP_FRONT_CMD $(basename $0) <ref> <cmd> [ --copy <src>:<dest> ] [ --existing | --new ] [ --help ]
+usage: $TUP_FRONT_CMD $(basename $0) <ref> <cmd> [ --bind <src>:<dest> ] [ --copy <src>:<dest> ] [ --existing | --new [ --ephemeral ] ] [ --help ]
 
 Run a command in an instance of container <ref>.
 
 Arguments:
 
-    cmd         The command to run in the container
-    ref         The ID of the container to run the command in
+    cmd          The command to run in the container
+    ref          The ID of the container to run the command in
 
-    --copy      Copy files from the host (<src>) into the container (<dest>)
-    --existing  Run the command in an existing instance of the container
-    --help      Print usage information
-    --new       Run the command in a new (temporary) instances of the container (default)
+    --bind       Bind mount a portion of the host filesystem <src> in the container under <dest>
+    --copy       Copy files from <src> on the host into the container at <dest>
+    --ephemeral  Destroy all changes when container exits (only valid with --new)
+    --existing   Run the command in an existing instance of the container
+    --help       Print usage information
+    --new        Run the command in a new (temporary) instance of the container (default)
 
 EOF
     exit 1
@@ -59,15 +69,17 @@ EOF
 opt_run_cmd="tup_mechanism_run_new"
 
 tup_getopt_required=(1 2)
-tup_getopt_optional=(copy: existing help new systemd-nspawn)
+tup_getopt_optional=(bind: copy: ephemeral existing help new systemd-nspawn)
 while tup_getopt; do
     case $tup_getopt_name in
         1) ref=$tup_getopt_value ;;
         2) opt_cmd=$tup_getopt_value ;;
-        existing) opt_run_cmd="tup_mechanism_run_existing" ;;
+        bind) opt_bind=$tup_getopt_value ;;
+        copy) opt_copy=$tup_getopt_value ;;
+        ephemeral) opt_ephemeral=1 ;;
+        existing) opt_existing=1; opt_run_cmd="tup_mechanism_run_existing" ;;
         help) _usage ;;
         image) image=$tup_getopt_value ;;
-        copy) opt_copy=$tup_getopt_value ;;
         new) opt_run_cmd="tup_mechanism_run_new" ;;
         systemd-nspawn) opt_mechanism=$tup_getopt_name ;;
     esac
@@ -88,7 +100,7 @@ fi
 
 # does the referenced container exist?
 if ! containerid=$(tup refparse --container "$ref"); then
-    tup_error 2 "container doesn't exist: $ref"
+    tup_error 2 "container run: container doesn't exist: $ref"
 fi
 
 # are there bindings for the specified mechanism?
@@ -100,35 +112,52 @@ fi
 
 binding=""
 for path in ${TUP_BINDINGS_PATH/:/ }; do
-    tup_debug 2 "searching for mechanism bindings in $path"
+    tup_debug 2 "container run: searching for mechanism bindings in $path"
     if [[ -f "$path/$mechanism" ]]; then
         binding="$path/$mechanism"
     fi
 done
 
-if [[ -z "$binding" ]]; then
-    tup_error 3 "unable to locate bindings for specified mechanism: $mechanism"
+if [[ -z $binding ]]; then
+    tup_error 3 "container run: unable to locate bindings for specified mechanism: $mechanism"
 fi
 
 . "$binding"
+
+# if we got --ephemeral, check that --new was also 
+if [[ $opt_ephemeral == 1 && ! -z $opt_existing ]]; then
+    tup_error 1 "container run: --ephemeral can only be specified if using --new"
+fi
 
 
 #
 # main
 #
 
+if [[ $opt_ephemeral != 1 ]]; then
+    tmpupperid=$(tup_conf get container $containerid volume)
+    if [[ ! -z $tmpupperid ]] && (tup volume show $tmpupperid) 2>&1 >/dev/null; then
+        upperid=$tmpupperid
+        tup_debug 2 "container run: using existing upper layer $upperid"
+    fi
+fi
+
 # prepare root filesystem
 for i in $(tup_conf get container $containerid layers); do
     layer=(${i/:/ })
     if [[ ${layer[1]} = "/" ]]; then
         if ! lowerids=$(tup layer mount ${layer[0]} --lineage); then
-            tup_error 4 "failed to mount read-only filesystem for container: $containerid"
+            tup_error 4 "container run: failed to mount read-only filesystem for container: $containerid"
         fi
-        if ! upperid=$(tup volume create --empty); then
-            tup_error 4 "failed to create read-write filesystem for container: $containerid"
+        if [[ -z $upperid ]]  && ! upperid=$(tup volume create --empty); then
+            tup_error 4 "container run: failed to create read-write filesystem for container: $containerid"
         fi
         if ! volumeid=$(echo -e "$lowerids\n$upperid" | tup volume unify --stdin --read-write); then
-            tup_error 4 "failed to create overlay for container: $containerid"
+            case $? in
+                0) ;;
+                100) ;;
+                *) tup_error 4 "container run: failed to create overlay for container: $containerid" ;;
+            esac
         fi
         tup_conf set container $containerid volume $upperid
     fi
@@ -136,16 +165,30 @@ done
 
 mntdir="$TUP_STORAGE_DIR/volumes/$(tup_path $volumeid)/mount"
 
+# process bind mounts
+for i in $opt_bind; do
+    path=(${i/:/ /})
+    tup_debug 2 "container run: mounting source ${path[0]} in ${path[1]}"
+    if [[ ! -d "${path[0]}" ]]; then
+        tup_error 2 "container run: source doesn't exist or is not a directory ${path[0]}"
+    fi
+    mkdir -p "$mntdir/${path[1]}"
+    if ! mount --bind "${path[0]}" "$mntdir/${path[1]}"; then
+        tup_error 4 "container run: failed to bind mount ${path[0]} to ${path[1]}"
+    fi
+    echo "$mntdir/${path[1]}" >> "$mntdir/../bindmounts"
+done
+
 # copy external sources
 for i in $opt_copy; do
     path=(${i/:/ })
-    tup_debug 2 "copying source ${path[0]} to ${path[1]}"
+    tup_debug 2 "container run: copying source ${path[0]} to ${path[1]}"
     if [[ ! -d "${path[0]}" ]]; then
-        tup_error 2 "source doesn't exist or is not a directory ${path[0]}"
+        tup_error 2 "container run: source doesn't exist or is not a directory ${path[0]}"
     fi
     mkdir -p "$mntdir/${path[1]}"
     if ! cp -rp "${path[0]}" "$mntdir/${path[1]}"; then 
-        tupe_error 4 "failed to copy ${path[0]} to ${path[1]}"
+        tup_error 4 "container run: failed to copy ${path[0]} to ${path[1]}"
     fi
 done
 

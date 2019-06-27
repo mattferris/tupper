@@ -10,7 +10,7 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: layer mount: can't locate common.inc" >&2
     exit 1
 fi
 
@@ -69,7 +69,7 @@ fi
 #
 
 if ! layerid=$(tup refparse --layer "$ref"); then
-    tup_error 2 "layer doesn't exist: $ref"
+    tup_error 2 "layer mount: layer doesn't exist: $ref"
 fi
 
 
@@ -83,21 +83,21 @@ if [[ $opt_lineage = 1 ]]; then
     layers=($(tup layer lineage $layerid --long-id --reverse))
 fi
 
-tup_debug 2 "mounting layers: ${layers[@]}"
+tup_debug 2 "layer mount: mounting layers: ${layers[@]}"
 
 for lid in ${layers[@]}; do
-    tup_debug 3 "mounting layer: $lid"
+    tup_debug 3 "layer mount: mounting layer: $lid"
     filesystemid=$(tup_conf get layer $lid filesystem)
     format=$(tup_conf get layer $lid format)
 
-    tup_debug 2 "running tup volume create --filesystem $filesystemid --$format --layer $layerid"
+    tup_debug 2 "layer mount: running tup volume create --filesystem $filesystemid --$format --layer $layerid"
     volumeid=$(tup volume create --filesystem $filesystemid --$format --layer $layerid) || { \
         rtn=$?
-        tup_debug 3 "tup volume create returned $rtn"
+        tup_debug 3 "layer mount: tup volume create returned $rtn"
         case $rtn in
             0) ;;
             100) ;;
-            *) tup_error 4 "failed to mount layer: $layerid" ;;
+            *) tup_error 4 "layer mount: failed to mount layer: $layerid" ;;
         esac
     }
 

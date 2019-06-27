@@ -10,7 +10,7 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: layer create: can't locate common.inc" >&2
     exit 1
 fi
 
@@ -93,21 +93,21 @@ fi
 #
 
 if [[ ! -z "$opt_filesystem" && ! -z "$opt_path" ]]; then
-    tup_error 2 "only one of --filesystem or --path can be specified"
+    tup_error 2 "layer create: only one of --filesystem or --path can be specified"
 elif [[ -z "$opt_filesystem" && -z "$opt_path" ]]; then
-    tup_error 2 "one of --filesystem or --path must be specified"
+    tup_error 2 "layer create: one of --filesystem or --path must be specified"
 fi
 
 if [[ ! -z "$opt_path" && ! -d "$opt_path" ]]; then
-    tup_error 2 "path doesn't exist: $opt_path"
+    tup_error 2 "layer create: path doesn't exist: $opt_path"
 fi
 
 if [[ ! -z "$opt_parent" ]] && ! parentid=$(tup refparse --layer "$opt_parent"); then
-    tup_error 2 "parent layer doesn't exist: $opt_parent"
+    tup_error 2 "layer create: parent layer doesn't exist: $opt_parent"
 fi
 
 if [[ ! -z "$opt_filesystem" ]] && ! filesystemid=$(tup refparse --filesystem "$opt_filesystem"); then
-    tup_error 2 "filesystem doesn't exist: $opt_filesystem"
+    tup_error 2 "layer create: filesystem doesn't exist: $opt_filesystem"
 fi
 
 #
@@ -118,9 +118,9 @@ tmpid=$(tup_sum_str $path $(date))
 tmpdir="$TUP_STORAGE_DIR/staging/$tmpid"
 
 if ! (mkdir -p "$tmpdir"); then
-    tup_error 3 "failed to create temporary layer directory: $tmpdir"
+    tup_error 3 "layer create: failed to create temporary layer directory: $tmpdir"
 fi
-tup_debug 1 "created temporary layer directory $tmpdir"
+tup_debug 1 "layer create: created temporary layer directory $tmpdir"
 
 
 #
@@ -134,32 +134,32 @@ if [[ ! -z "$opt_path" ]]; then
 
         plain)
             if ! (cp -rp "$opt_path" "$tmpdir/fs"); then
-                tup_error 3 "error: failed to copy path: $opt_path"
+                tup_error 3 "layer create: failed to copy path: $opt_path"
             fi
-            tup_debug 1 "copied $opt_path to $tmpdir/fs"
+            tup_debug 1 "layer create: copied $opt_path to $tmpdir/fs"
             filesytemid=$(tup_sum_dir "$tmpdir/fs")
             ;;
 
         squashfs)
-            tup_debug 2 "mksquashfs $opt_path $tmpdir/fs -no-progress $opt_squashfs_opts"
+            tup_debug 2 "layer create: mksquashfs $opt_path $tmpdir/fs -no-progress $opt_squashfs_opts"
             if ! (mksquashfs "$opt_path" "$tmpdir/fs" -no-progress $opt_squashfs_opts 2>&1 >/dev/null); then
-                tup_error 3 "failed to create squashfs from path: $opt_path"
+                tup_error 3 "layer create: failed to create squashfs from path: $opt_path"
             fi
-            tup_debug 1 "created squashfs from $opt_path"
+            tup_debug 1 "layer create: created squashfs from $opt_path"
             filesystemid=$(tup_sum_file "$tmpdir/fs")
             ;;
 
         tgz)
-            tup_debug 2 "tar czf $tmpdir/fs --acls --xattrs $opt_tar_opts $opt_path"
+            tup_debug 2 "layer create: tar czf $tmpdir/fs --acls --xattrs $opt_tar_opts $opt_path"
             if ! (tar czf "$tmpdir/fs" --acls --xattrs $opt_tar_opts "$opt_path" 2>&1 >/dev/null); then
-                tup_error 3 "failed to create tarball from path: $opt_path"
+                tup_error 3 "layer create: failed to create tarball from path: $opt_path"
             fi
-            tup_debug 1 "create tarball from $opt_path"
+            tup_debug 1 "layer create: create tarball from $opt_path"
             filesystemid=$(tup_sum_file "$tmpdir/fs")
             ;;
 
         *)
-            tup_error 1 "invalid format specified: $format"
+            tup_error 1 "layer create: invalid format specified: $format"
             ;;
 
     esac
@@ -178,33 +178,33 @@ if [[ ! -z "$parentid" ]]; then
 fi
 
 if ! (tup refparse --filesystem "$filesystemid"); then
-    tup_debug 1 "creating filesystem $filesystemid"
+    tup_debug 1 "layer create: creating filesystem $filesystemid"
 
     fsdir="$TUP_STORAGE_DIR/filesystems/$(tup_path "$filesystemid")"
     if ! (mkdir -p "$(dirname "$fsdir")"); then
-        tup_error 3 "failed to create filesystem dir $(dirname $fsdir)"
+        tup_error 3 "layer create: failed to create filesystem dir $(dirname $fsdir)"
     fi
     if ! (mv "$tmpdir/fs" "$fsdir"); then
-        tup_error 3 "failed to create filesystem: $filesystemid"
+        tup_error 3 "layer create: failed to create filesystem: $filesystemid"
     fi
 else
-    tup_debug 1 "using existing filesystem $filesystemid"
+    tup_debug 1 "layer create: using existing filesystem $filesystemid"
 fi
 
 layerid=$(tup_sum_dir "$tmpdir")
-tup_debug 1 "calculated layer checksum $layerid"
+tup_debug 1 "layer create: calculated layer checksum $layerid"
 
 path=$(tup_path $layerid)
 pdir=$(dirname $path);
 
 if ! (mkdir -p "$TUP_STORAGE_DIR/layers/$pdir"); then
-    tup_error 3 "failed to create layer parent directory: $TUP_STORAGE_DIR/layers/$pdir"
+    tup_error 3 "layer create: failed to create layer parent directory: $TUP_STORAGE_DIR/layers/$pdir"
 fi
 
 if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/layers/$pdir/$layerid"); then
-    tup_error 3 "failed to create layer directory $TUP_STORAGE_DIR/layers/$path"
+    tup_error 3 "layer create: failed to create layer directory $TUP_STORAGE_DIR/layers/$path"
 fi
-tup_debug 1 "moved $tmpdir to $TUP_STORAGE_DIR/layers/$path"
+tup_debug 1 "layer create: moved $tmpdir to $TUP_STORAGE_DIR/layers/$path"
 
 if [[ -t 1 ]]; then
     echo -n "created layer "

@@ -10,7 +10,7 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: image verify: can't locate common.inc" >&2
     exit 1
 fi
 
@@ -71,7 +71,7 @@ fi
 #
 
 if ! imageid=$(tup refparse --image "$ref"); then
-    tup_error 2 "image doesn't exist: $ref"
+    tup_error 2 "image verify: image doesn't exist: $ref"
 fi
 
 
@@ -91,15 +91,14 @@ while [[ ! -z "$imageid" ]]; do
         parts=(${layer/:/ /})
         layerid=${parts[0]}
         if ! (tup layer verify "$layerid" >&1 >/dev/null); then
-            tup_error 4 "failed (layer $layerid failed verification)"
+            tup_error 4 "image verify: failed (layer $layerid failed verification)"
         fi
-        tup_debug 1 "verified layer $layerid"
+        tup_debug 1 "image verify: verified layer $layerid"
     done
 
     imagesum=$(tup_sum_dir "$TUP_STORAGE_DIR/images/$(tup_path $imageid)")
     if [[ ! $imagesum = $imageid ]]; then
-        echo "$outid failed (expected $imageid, got $imagesum)"
-        exit 1 
+        tup_error 1 "image verify: $outid failed (expected $imageid, got $imagesum)"
     fi
 
     echo "$outid ok"

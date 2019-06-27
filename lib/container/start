@@ -10,7 +10,7 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: container start: can't locate common.inc" >&2
     exit 1
 fi
 
@@ -82,7 +82,7 @@ fi
 
 # does the referenced container exist?
 if ! containerid=$(tup refparse --container "$ref"); then
-    tup_error 2 "container doesn't exist: $ref"
+    tup_error 2 "container start: container doesn't exist: $ref"
 fi
 
 # are there bindings for the specified mechanism?
@@ -101,7 +101,7 @@ for path in ${TUP_BINDINGS_PATH/:/ }; do
 done
 
 if [[ -z "$binding" ]]; then
-    tup_error 3 "unable to locate bindings for specified mechanism: $mechanism"
+    tup_error 3 "container start: unable to locate bindings for specified mechanism: $mechanism"
 fi
 
 . "$binding"
@@ -116,13 +116,13 @@ for i in $(tup_conf get container $containerid layers); do
     layer=(${i/:/ })
     if [[ ${layer[1]} = "/" ]]; then
         if ! lowerids=$(tup layer mount ${layer[0]} --lineage); then
-            tup_error 4 "failed to mount read-only filesystem for container: $containerid"
+            tup_error 4 "container start: failed to mount read-only filesystem for container: $containerid"
         fi
         if ! upperid=$(tup volume create --empty); then
-            tup_error 4 "failed to create read-write filesystem for container: $containerid"
+            tup_error 4 "container start: failed to create read-write filesystem for container: $containerid"
         fi
         if ! volumeid=$(echo -e "$lowerids\n$upperid" | tup volume unify --stdin --read-write); then
-            tup_error 4 "failed to create overlay for container: $containerid"
+            tup_error 4 "container start: failed to create overlay for container: $containerid"
         fi
         tup_conf set container $containerid volume $upperid
     fi
@@ -133,7 +133,7 @@ export TUP_MECHANISM_ROOT="$TUP_STORAGE_DIR/volumes/$(tup_path $volumeid)/mount"
 export TUP_MECHANISM_BOOT=$(tup_conf get container $containerid boot)
 export TUP_MECHANISM_NAME=$(tup_conf get container $containerid name)
 if ! (tup_mechanism_start); then
-    tup_error 4 "failed to start container: $containerid"
+    tup_error 4 "container start: failed to start container: $containerid"
 fi
 
 if [[ -t 1 ]]; then

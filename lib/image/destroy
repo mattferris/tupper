@@ -10,7 +10,7 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: image destroy: can't locate common.inc" >&2
     exit 1
 fi
 
@@ -67,11 +67,11 @@ fi
 #
 
 if ! imageid=$(tup refparse --image "$ref"); then
-    tup_error 2 "image doesn't exist: $ref"
+    tup_error 2 "image destroy: image doesn't exist: $ref"
 fi
 
 if ! (rm -r "$TUP_STORAGE_DIR/images/$(tup_path $imageid)"); then
-    tup_error 3 "failed to destroy images: $imageid"
+    tup_error 3 "image destroy: failed to destroy images: $imageid"
 fi
 
 if [[ -t 1 ]]; then

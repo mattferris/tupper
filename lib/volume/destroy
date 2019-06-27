@@ -10,7 +10,7 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: volume destroy: can't locate common.inc" >&2
     exit 1
 fi
 
@@ -67,7 +67,7 @@ fi
 #
 
 if ! volumeid=$(tup refparse --volume "$ref"); then
-    tup_error 2 "volume doesn't exist: $volumeid"
+    tup_error 2 "volume destroy: volume doesn't exist: $volumeid"
 fi
 
 format=$(tup_conf get volume $volumeid format)
@@ -81,8 +81,8 @@ case $format in
         msg=$(umount "$path" 2>&1 >/dev/null) || \
         case $? in
             0) ;;
-            32) tup_debug 2 "overlayfs volume not mounted: $volumeid" ;;
-            *) tup_error 3 "failed to unmount overlayfs: ($code) $path" ;;
+            32) tup_debug 2 "volume destroy: overlayfs volume not mounted: $volumeid" ;;
+            *) tup_error 3 "volume destroy: failed to unmount overlayfs: ($code) $path" ;;
         esac
         ;;
 
@@ -93,8 +93,8 @@ case $format in
         msg=$(umount "$path" 2>&1 >/dev/null) || \
         case $? in
             0) ;;
-            32) tup_debug 2 "squashfs volume not mounted: $volumeid" ;;
-            *) tup_error 3 "failed to unmount squashfs: ($code) $path" ;;
+            32) tup_debug 2 "volume destroy: squashfs volume not mounted: $volumeid" ;;
+            *) tup_error 3 "volume destroy: failed to unmount squashfs: ($code) $path" ;;
         esac
         ;;
 
@@ -102,13 +102,13 @@ case $format in
         ;;
 
     *)
-        tup_error 2 "unknown format specified: $format"
+        tup_error 2 "volume destroy: unknown format specified: $format"
         ;;
 
 esac
 
 if ! (rm -r "$(dirname "$path")"); then
-    tup_error 3 "failed to remove volume directory: $path"
+    tup_error 3 "volume destroy: failed to remove volume directory: $path"
 fi
 
 if [[ -t 1 ]]; then

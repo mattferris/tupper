@@ -10,7 +10,7 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: image create: can't locate common.inc" >&2
     exit 1
 fi
 
@@ -89,11 +89,11 @@ fi
 if [[ ! -z $opt_layers && ! -z $opt_volumes ]] \
    || [[ ! -z $opt_path && ! -z $opt_layers ]] \
    || [[ ! -z $opt_path && ! -z $opt_volumes ]]; then
-    tup_error 1 "only one of --layer, --path, or --volume can be specified"
+    tup_error 1 "image create: only one of --layer, --path, or --volume can be specified"
 fi
 
 if [[ ! -z $opt_layer_format && ! -z $opt_layers ]]; then
-    echo "warning: using --${opt_layer_format} with --layers doesn't make sense, ignoring" >&2
+    tup_notice "image create: using --${opt_layer_format} with --layers doesn't make sense, ignoring"
 fi
 
 #
@@ -101,15 +101,15 @@ fi
 #
 
 if [[ ! -z $opt_path && ! -d "$opt_path" ]]; then
-    tup_error 2 "path doesn't exist: $opt_path"
+    tup_error 2 "image create: path doesn't exist: $opt_path"
 fi
 
 if [[ ! -z $opt_parent ]] && ! parentid=$(tup refparse --image "$opt_parent"); then
-    tup_error 2 "parent image doesn't exist: $opt_parent"
+    tup_error 2 "image create: parent image doesn't exist: $opt_parent"
 fi
 
 if [[ ! -z $opt_boot && ! -z $opt_entrypoint ]]; then
-    tup_error 2 "only one of --boot or --entrypoint can be specified"
+    tup_error 2 "image create: only one of --boot or --entrypoint can be specified"
 fi
 
 
@@ -121,9 +121,9 @@ tmpid=$(tup_sum_str $name $(date))
 tmpdir="$TUP_STORAGE_DIR/staging/$tmpid"
 
 if ! (mkdir -p "$tmpdir"); then
-    tup_error 3 "failed to create temporary image directory: $tmpdir"
+    tup_error 3 "image create: failed to create temporary image directory: $tmpdir"
 fi
-tup_debug 1 "created temporary image directory $tmpdir"
+tup_debug 1 "image create: created temporary image directory $tmpdir"
 
 touch "$tmpdir/conf"
 tup_conf set path "$tmpdir/conf" author "$TUP_USER_NAME <$TUP_USER_EMAIL>"
@@ -132,7 +132,7 @@ tup_conf set path "$tmpdir/conf" date $(date --iso-8601=seconds)
 
 if [[ ! -z $opt_path ]]; then
 
-    tup_debug 1 "creating new layer from path: $opt_path"
+    tup_debug 1 "image create: creating new layer from path: $opt_path"
 
     if [[ ! -z $opt_layer_format ]]; then
         opt_layer_format="--$opt_layer_format"
@@ -140,7 +140,7 @@ if [[ ! -z $opt_path ]]; then
 
     # create the new layer
     if ! layerid=$(tup layer create --path "$opt_path" $opt_layer_format); then
-        tup_error 4 "failed to initialize image: $name"
+        tup_error 4 "image create: failed to initialize image: $name"
     fi
 
     tup_conf set path "$tmpdir/conf" layers $layerid:/
@@ -155,7 +155,7 @@ elif [[ ! -z $opt_layers ]]; then
             layer=(${i/:/ })
             tup_debug 2 "image create: checking layer ${layer[0]}:${layer[1]}"
             if ! layerid=$(tup refparse --layer "${layer[0]}"); then
-                tup_error 2 "layer doesn't exist: ${layer[0]}"
+                tup_error 2 "image create: layer doesn't exist: ${layer[0]}"
             fi
             if [[ ${layer[1]} = "/" ]]; then
                 hasroot=1
@@ -165,7 +165,7 @@ elif [[ ! -z $opt_layers ]]; then
     fi
 
     if [[ $hasroot = 0 ]]; then
-        tup_error 2 "no root filesystem specified"
+        tup_error 2 "image create: no root filesystem specified"
     fi
 
     tup_conf set path "$tmpdir/conf" layers "${layers[@]}"
@@ -177,7 +177,7 @@ if [[ ! -z $parentid ]]; then
 fi
 
 if [[ ! -z $opt_labels ]]; then
-    tup_conf set path "$tmpdir/conf" labels ${labels/,/ }
+    tup_conf set path "$tmpdir/conf" labels ${opt_labels/,/ }
 fi
 
 if [[ ! -z $opt_boot ]]; then
@@ -193,13 +193,13 @@ path=$(tup_path "$imageid")
 pdir=$(dirname $path);
 
 if ! (mkdir -p "$TUP_STORAGE_DIR/images/$pdir"); then
-    tup_error 3 "failed to create images parent directory: $TUP_STORAGE_DIR/images/$pdir"
+    tup_error 3 "image create: failed to create images parent directory: $TUP_STORAGE_DIR/images/$pdir"
 fi
 
 if ! (mv "$tmpdir" "$TUP_STORAGE_DIR/images/$pdir/$imageid"); then
-    tup_error 3 "failed to create image dir $TUP_STORAGE_DIR/images/$path"
+    tup_error 3 "image create: failed to create image dir $TUP_STORAGE_DIR/images/$path"
 fi
-tup_debug 1 "moved $tmpdir to $TUP_STORAGE_DIR/images/$path"
+tup_debug 1 "image create: moved $tmpdir to $TUP_STORAGE_DIR/images/$path"
 
 if [[ -t 1 ]]; then
     echo -n "created image $name "

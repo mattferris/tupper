@@ -10,7 +10,7 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: layer squash: can't locate common.inc" >&2
     exit 1
 fi
 
@@ -71,21 +71,21 @@ if [[ $ref = *".."* ]]; then
 
     refs=(${ref/../ })
 
-    tup_debug 1 "merging related layers from ${refs[0]} to ancestor ${refs[1]}"
+    tup_debug 1 "layer squash: merging related layers from ${refs[0]} to ancestor ${refs[1]}"
 
-    tup_debug 3 "tup refparse --layer ${refs[0]}"
+    tup_debug 3 "layer squash: tup refparse --layer ${refs[0]}"
     if ! current_layerid=$(tup refparse --layer "${refs[0]}"); then
-        tup_error 2 "layer doesn't exist: ${refs[0]}"
+        tup_error 2 "layer squash: layer doesn't exist: ${refs[0]}"
     fi
 
-    tup_debug 3 "tup refparse --layer ${refs[0]}"
+    tup_debug 3 "layer squash: tup refparse --layer ${refs[0]}"
     if ! ancestor_layerid=$(tup refparse --layer "${refs[1]}"); then
-        tup_error 2 "ancestor layer doesn't exist: ${refs[1]}"
+        tup_error 2 "layer squash: ancestor layer doesn't exist: ${refs[1]}"
     fi
 
-    tup_debug 3 "tup layer lineage $current_layerid --long-id"
+    tup_debug 3 "layer squash: tup layer lineage $current_layerid --long-id"
     if ! lineage=$(tup layer lineage $current_layerid --long-id); then
-        tup_error 4 "failed to get lineage of layer: $current_layerid"
+        tup_error 4 "layer squash: failed to get lineage of layer: $current_layerid"
     fi
 
     matched=0
@@ -98,17 +98,17 @@ if [[ $ref = *".."* ]]; then
     done
 
     if [[ $matched = 0 ]]; then
-        tup_error 2 "${refs[1]} is not an ancestor of ${refs[0]}"
+        tup_error 2 "layer squash: ${refs[1]} is not an ancestor of ${refs[0]}"
     fi
 
 else
 
-    tup_debug 1 "merging unlreated layers ${tup_getopt_posargs[@]}"
+    tup_debug 1 "layer squash: merging unrelated layers ${tup_getopt_posargs[@]}"
 
     for ref in ${tup_getopt_posargs[@]}; do
 
         if ! layerid=$(tup refparse --layer "$ref"); then
-            tup_error 2 "layer doesn't exist: $ref"
+            tup_error 2 "layer squash: layer doesn't exist: $ref"
         fi
 
         layers=(${layers[@]} $layerid)
@@ -124,16 +124,16 @@ fi
 
 for l in ${layers[@]}; do
     if ! (tup layer mount $l); then
-        tup_error 3 "failed to mount layer: $l"
+        tup_error 3 "layer squash: failed to mount layer: $l"
     fi
 done
 
 if ! volumeid=$(echo ${layers[@]} | tup volume unify --stdin --read-only); then
-    tup_error 3 "failed to create union mount"
+    tup_error 3 "layer squash: failed to create union mount"
 fi
 
 if ! layerid=$(tup volume commit $volumeid); then
-    tup_error 3 "failed to commit volume: $volumeid"
+    tup_error 3 "layer squash: failed to commit volume: $volumeid"
 fi
 
 if [[ -t 1 ]]; then

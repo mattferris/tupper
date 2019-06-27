@@ -10,14 +10,14 @@
 set -e
 
 if ! [[ -f "$TUP_LIB_DIR/includes/common.inc" ]]; then
-    echo "error: can't locate common.inc" >&2
+    echo "error: volume unify: can't locate common.inc" >&2
     exit 1
 fi
 
 . "$TUP_LIB_DIR/includes/common.inc"
 
 _cleanup() {
-    tup_debug 1 "cleaning up"
+    tup_debug 1 "volume unify: cleaning up"
     if [[ ! -z "$voldir" && -d "$voldir" ]]; then
         rm -r "$voldir" 2>&1 >/dev/null
     fi
@@ -79,7 +79,7 @@ fi
 #
 
 if [[ -z $opt_stdin && ${#tup_getopt_posargs[@]} = 0 ]]; then
-    tup_error 2 "no volumes specified"
+    tup_error 2 "volume unify: no volumes specified"
 fi
 
 
@@ -91,24 +91,24 @@ volumes=()
 volids=()
 
 if [[ $opt_stdin = 1 ]]; then
-    tup_debug 1 "reading volumes from stdin"
+    tup_debug 1 "volume unify: reading volumes from stdin"
     while read id; do
         if ! volid=$(tup refparse --volume "$id"); then
-            tup_error 2 "volume doesn't exist: $id"
+            tup_error 2 "volume unify: volume doesn't exist: $id"
         fi
-        tup_debug 3 "using volume $volid"
+        tup_debug 3 "volume unify: found volume $volid"
         volumes=("${volumes[@]}" "$TUP_STORAGE_DIR/volumes/$(tup_path $volid)/mount")
         volids=(${volids[@]} $volid)
     done
 else
-    tup_debug 1 "reading volumes from command line"
+    tup_debug 1 "volume unify: reading volumes from command line"
     i=0
     while [[ ! -z ${tup_getopt_posargs[$i]} ]]; do
         id=${tup_getopt_posargs[$i]}
         if ! volid=$(tup refparse --volume "$id"); then
-            tup_error 2 "volume doesn't exist: $id"
+            tup_error 2 "volume unify: volume doesn't exist: $id"
         fi
-        tup_debug 3 "using volume $volid"
+        tup_debug 3 "volume unify: found volume $volid"
         volumes=("${volumes[@]}" "$TUP_STORAGE_DIR/volumes/$(tup_path $volid)/mount")
         volids=(${volids[@]} $volid)
         let i=i+1
@@ -118,19 +118,23 @@ fi
 volumeid=$(tup_sum_str "${volumes[@]}")
 voldir="$TUP_STORAGE_DIR/volumes/$(tup_path $volumeid)"
 
-tup_debug 2 "using volume ID $volumeid"
+tup_debug 2 "volume unify: generated unified volume ID $volumeid"
 
 if [[ -d "$voldir" ]]; then
     voldir=""
-    tup_error 2 "volume already exists: $volumeid"
+    if [[ -t 1 ]]; then
+        echo -n "already unified as "
+    fi
+    echo $volumeid
+    tup_warn 100 "volume unify: volume already mounted: $volumeid"
 fi
 
 if ! (mkdir -p "$voldir/.overlayfs"); then
-    tup_error 4 "failed to create volume directory: $voldir"
+    tup_error 4 "volume unify: failed to create volume directory: $voldir"
 fi
 
 if ! (mkdir "$voldir/mount"); then
-    tup_error 4 "failed to create mount point: $voldir/mount"
+    tup_error 4 "volume unify: failed to create mount point: $voldir/mount"
 fi
 
 lowerdir=""
@@ -142,10 +146,10 @@ len=${#volumes[@]}
 while [[ $i -lt $len ]]; do
     let next=i+1
     if [[ $next = $len && $opt_read_write = 1 ]]; then
-        tup_debug 2 "upperdir ${volumes[$i]}"
+        tup_debug 2 "volume unify: upperdir ${volumes[$i]}"
         upperdir=${volumes[$i]}
     else
-        tup_debug 2 "lowerdir ${volumes[$i]}"
+        tup_debug 2 "volume unify: lowerdir ${volumes[$i]}"
         if [[ ! -z $lowerdir ]]; then
             lowerdir="$lowerdir:"
         fi
@@ -161,7 +165,7 @@ if [[ ! -z $upperdir ]]; then
 fi
 
 if ! (mount -t overlay overlay -o $opts "$voldir/mount" 2>&1 >/dev/null); then
-    tup_error 3 "failed to mount overlayfs: $opts"
+    tup_error 3 "volume unify: failed to mount overlayfs: $opts"
 fi
 
 touch "$voldir/conf"
