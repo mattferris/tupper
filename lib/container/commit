@@ -87,6 +87,14 @@ if ! containerid=$(tup refparse --container "$ref"); then
     tup_error 2 "container commit: container doesn't exist: $ref"
 fi
 
+layers=($(tup_conf get container $containerid layers))
+
+if [[ -z $layers ]]; then
+    fl=${layers[0])
+    parts=(${fl/:/ })
+    opt_args="$opt_args --layer ${parts[0]}"
+fi
+
 volumeid=$(tup_conf get container $containerid volume)
 if [[ -z $volumeid ]]; then
     tup_error 2 "container commit: container doesn't have an active volume"
